@@ -1,0 +1,36 @@
+name: sound_recognition
+description: >-
+  On-device sound recognition for iOS and Android with one shared vocabulary:
+  Apple SoundAnalysis on iOS, a bundled YAMNet model on Android, no network.
+version: 0.1.0
+repository: https://github.com/jameskrupnik/sound_recognition
+issue_tracker: https://github.com/jameskrupnik/sound_recognition/issues
+
+environment:
+  sdk: ^3.6.0
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  very_good_analysis: ^10.3.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.illuminationdevelopment.sound_recognition
+        pluginClass: SoundRecognitionPlugin
+      ios:
+        pluginClass: SoundRecognitionPlugin
+
+topics:
+  - audio
+  - machine-learning
+  - sound
+  - classification
+  - microphone

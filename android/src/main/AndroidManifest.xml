@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Merged into the consuming app's manifest. Declared here because a
+       sound-recognition plugin that cannot record is not a plugin; remove it
+       in the app with tools:node="remove" if you really mean to. -->
+  <uses-permission android:name="android.permission.RECORD_AUDIO" />
+</manifest>

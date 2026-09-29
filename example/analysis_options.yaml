@@ -1,0 +1,2 @@
+# The package standard, so the example is held to what it demonstrates.
+include: ../analysis_options.yaml

@@ -1,0 +1,76 @@
+# The workspace-wide readability standard.
+#
+# Base: `very_good_analysis` (195 rules) rather than a hand-picked list — a
+# hand-picked list is a list somebody has to remember to grow, and the six
+# rules this replaced had not grown across a year of forks.
+#
+# Everything under `linter:` is an *override* of that base and carries the
+# reason it is off. Do not turn a rule off without one.
+#
+# What this cannot see — file length, function length, nesting depth — is in
+# `../code-standards/bin/check_readability.dart`. Run both.
+include: package:very_good_analysis/analysis_options.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+
+  exclude:
+    - build/**
+    - .dart_tool/**
+    - '**/*.g.dart'
+    # The barrels `barreler` writes. Generated, and re-exporting everything is
+    # the point of them, so `directives_ordering` has nothing useful to say.
+    - packages/*/lib/*.dart
+
+linter:
+  rules:
+    # --- Off, with reasons -------------------------------------------------
+
+    # Carried from the app config this is shared with. A doc comment on
+    # every public
+    # member buys a wall of `/// The name.` restatements, which is the
+    # opposite of readable — and it would drown the comments in these repos
+    # that are genuinely worth reading.
+    public_member_api_docs: true
+
+    # **This rule breaks `math.max`/`math.min` and it broke five apps here.**
+    # Rewriting `math.max(0.0, x)` to `math.max(0, x)` selects the `num`
+    # overload instead of the `double` one, so the result no longer assigns to
+    # a `double` — a compile error `dart fix` introduces while "fixing" style.
+    # Cost seven sites across four Flutter apps on 2026-09-08.
+    prefer_int_literals: false
+
+    # **`dart fix` applies this incorrectly to a collection-`if` whose bound
+    # variable is used in the map KEY.** In one app here it rewrote
+    # `if (m[k] case final dinner?) dinner.key: dinner` to
+    # `dinner.key: ?m[k]`, leaving `dinner` undefined — a compile error
+    # introduced by a style fix, found 2026-09-08.
+    use_null_aware_elements: false
+
+    # The doc comments here routinely quote a table of measurements or a URL
+    # that cannot be wrapped. The formatter already holds *code* to 80.
+    lines_longer_than_80_chars: false
+
+    # Flame's `update`/`render` and Flutter's callback signatures hand back
+    # positional arguments this codebase deliberately ignores as `_`.
+    no_leading_underscores_for_local_identifiers: false
+
+    # --- On, and not in the base set ---------------------------------------
+
+    # The four that push a `build` method toward widgets and away from
+    # hand-rolled containers.
+    avoid_unnecessary_containers: true
+    sized_box_for_whitespace: true
+    use_colored_box: true
+    use_decorated_box: true
+
+    # Carried forward from the config this replaces.
+    always_use_package_imports: true
+    avoid_print: true
+    prefer_const_constructors: true
+    prefer_final_fields: true
+    require_trailing_commas: true
+    use_key_in_widget_constructors: true

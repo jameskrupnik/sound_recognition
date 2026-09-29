@@ -1,0 +1,25 @@
+name: sound_recognition_example
+description: Demonstrates sound_recognition — a live detection list and a sound hunt.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.6.0
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # The package under demonstration, by path. An example is built against the
+  # working tree rather than the published version, so a change to the plugin
+  # is exercised here before it is released rather than after.
+  sound_recognition:
+    path: ../
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  very_good_analysis: ^10.3.0
+
+flutter:
+  uses-material-design: true
