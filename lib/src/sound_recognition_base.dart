@@ -122,11 +122,27 @@ class SoundRecognition {
   /// With neither [sounds] nor [rawLabels], every label that clears the floor
   /// is reported. With either, only detections whose [SoundDetection.sound]
   /// is in [sounds] *or* whose raw label is in [rawLabels].
+  ///
+  /// [recordTo], an absolute path ending in `.m4a`, also saves what the
+  /// microphone hears to that file, as mono AAC, from the same capture the
+  /// classifier reads — there is no second recorder. An existing file there
+  /// is replaced. The recording ends, and the file is finalized, when this
+  /// stream stops listening for any reason, or at the first
+  /// [SoundListeningState.interrupted]: classification resumes after an
+  /// interruption, but an m4a cannot be appended to, so the recording does
+  /// not. If no audio arrived, no file is left behind.
+  ///
+  /// Recording is best effort. If the file cannot be created or the encoder
+  /// fails, classification carries on without it and the reason is only
+  /// logged natively, so check that the file exists before offering it for
+  /// playback. The file stays on the device; the app owns it, and deleting
+  /// it is the app's job.
   Stream<SoundDetection> start({
     double minConfidence = 0.5,
     double overlap = 0.5,
     Set<CanonicalSound>? sounds,
     Set<String>? rawLabels,
+    String? recordTo,
   }) {
     if (minConfidence < 0.01 || minConfidence > 1) {
       throw ArgumentError.value(
@@ -138,6 +154,15 @@ class SoundRecognition {
     // Capped below 1: at 1 there is no hop, and the next window never comes.
     if (overlap < 0 || overlap > 0.9) {
       throw ArgumentError.value(overlap, 'overlap', 'must be from 0 to 0.9');
+    }
+    if (recordTo != null &&
+        (!recordTo.startsWith('/') ||
+            !recordTo.toLowerCase().endsWith('.m4a'))) {
+      throw ArgumentError.value(
+        recordTo,
+        'recordTo',
+        'must be an absolute path ending in .m4a',
+      );
     }
     unawaited(stop());
 
@@ -158,6 +183,7 @@ class SoundRecognition {
         _native = eventChannel.receiveBroadcastStream({
           'minConfidence': minConfidence,
           'overlap': overlap,
+          if (recordTo != null) 'recordTo': recordTo,
         }).listen(
           (event) => _onEvent(event, controller, wanted),
           onError: (Object error, StackTrace stackTrace) {

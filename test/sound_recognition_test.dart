@@ -111,6 +111,62 @@ void main() {
       await sub.cancel();
     });
 
+    test('sends recordTo only when given', () async {
+      final sub = recognition
+          .start(recordTo: '/data/practice/2026-09-30.m4a')
+          .listen((_) {});
+      await pumpEventQueue();
+      expect(listens.single, {
+        'minConfidence': 0.5,
+        'overlap': 0.5,
+        'recordTo': '/data/practice/2026-09-30.m4a',
+      });
+      await sub.cancel();
+      expect(cancels, 1);
+    });
+
+    test('accepts an upper-case .M4A extension', () async {
+      final sub = recognition.start(recordTo: '/tmp/a.M4A').listen((_) {});
+      await pumpEventQueue();
+      expect((listens.single! as Map)['recordTo'], '/tmp/a.M4A');
+      await sub.cancel();
+    });
+
+    test('rejects a recordTo that is not an absolute .m4a path', () {
+      for (final path in [
+        '/tmp/a.wav',
+        '/tmp/a.m4a.tmp',
+        '/tmp/m4a',
+        'relative/a.m4a',
+        'a.m4a',
+        '',
+      ]) {
+        expect(
+          () => recognition.start(recordTo: path),
+          throwsA(
+            isA<ArgumentError>().having((e) => e.name, 'name', 'recordTo'),
+          ),
+          reason: path,
+        );
+      }
+      // A rejected call must not have replaced or opened anything.
+      expect(listens, isEmpty);
+    });
+
+    test('a second start without recordTo does not carry it over', () async {
+      final firstDone = Completer<void>();
+      recognition
+          .start(recordTo: '/tmp/a.m4a')
+          .listen((_) {}, onDone: firstDone.complete);
+      await pumpEventQueue();
+      final second = recognition.start().listen((_) {});
+      await firstDone.future.timeout(const Duration(seconds: 1));
+      await pumpEventQueue();
+      expect(listens.last, {'minConfidence': 0.5, 'overlap': 0.5});
+      expect(cancels, 1);
+      await second.cancel();
+    });
+
     test('rejects settings out of range', () {
       expect(() => recognition.start(minConfidence: 0), throwsArgumentError);
       expect(() => recognition.start(overlap: 1), throwsArgumentError);
