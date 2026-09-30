@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Added:** `start(recordTo: '/abs/path.m4a')` also saves what the
+  microphone hears, as mono AAC in an `.m4a`, from the same capture the
+  classifier reads — the input tap on iOS, the `AudioRecord` loop on
+  Android. The file is finalized when listening stops for any reason and at
+  the first interruption, and is not left behind if no audio arrived.
+  Recording is best effort: if the file or encoder cannot be created,
+  classification carries on and the reason is only logged. The path must be
+  absolute and end in `.m4a`, or `start()` throws `ArgumentError`. Android
+  records at YAMNet's 16 kHz. Both encoders are proven on audio files; the
+  recording inside the live microphone pipelines has not been run.
 - **Fixed:** listening to a stream that a later `start()` or `stop()` had
   already replaced opened the microphone with the stale settings, took over
   the live stream's native session, and could not be stopped by cancelling

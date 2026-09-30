@@ -34,13 +34,16 @@ been run against a real microphone.** In detail:
 
 | Layer | State |
 |---|---|
-| Dart API, channel protocol, filtering, errors | 44 unit tests, green |
+| Dart API, channel protocol, filtering, errors | 48 unit tests, green |
 | Label mapping | Every mapped label checked against the platform's real list, in a test |
-| Android: YAMNet + LiteRT + the plugin's windowing | **Run** on API 35 (Pixel Tablet) and API 34 (Nexus 7) arm64 emulators by an instrumented test over five WAV clips, 7/7 passing |
+| Android: YAMNet + LiteRT + the plugin's windowing | **Run** on API 35 (Pixel Tablet) and API 34 (Nexus 7) arm64 emulators by an instrumented test over five WAV clips |
 | Android: `AudioRecord` capture, permission flow, lifecycle pause, hot restart | **Run** by hand in the example on an API 34 emulator, debug and R8 release, with the emulator's silent input: capture starts and stops, background releases and foreground reopens the recorder, a dismissed prompt stays `undetermined` and a second denial reads `denied`, a hot restart releases the mic |
 | Android: mic-silencing callback, pre-Android 10 capture | **Never run** |
 | iOS: Apple's classifier at the plugin's settings | **Run** on macOS 26.5 through `SNAudioStreamAnalyzer`, fed the way the plugin feeds it (`tool/classify_wav_apple_stream.swift`) |
 | iOS: `AVAudioEngine` tap, audio session, interruptions, permission | Compiles and links for the simulator under both CocoaPods and Swift Package Manager. **Never run** |
+| Recording, Android: `AacRecorder` (`MediaCodec` + `MediaMuxer`) | **Run** on the same two emulators by instrumented tests: a clip fed in 100 ms chunks becomes an m4a that `MediaExtractor` reads as mono 16 kHz AAC of the clip's length; no audio leaves no file; a missing directory gives no recorder. 11/11 passing with the classifier tests |
+| Recording, iOS: `AudioFileRecorder` (`AVAudioFile` + `AVAudioConverter`) | **Run** on macOS 26.5 by `tool/record_wav_apple.swift` over the clips: the no-conversion, resampling and stereo-downmix paths all give AAC of the input's exact length; no audio leaves no file |
+| Recording inside the live pipelines (tap, capture loop, interruptions, stop) | Compiles and builds on both platforms. **Never run** |
 | Real-world sounds (an actual dog or doorbell) | **Unverified.** The test audio is synthetic and text-to-speech; see below |
 
 The test clips are in `tool/test_audio/`: macOS `say` speech, and four
@@ -93,6 +96,10 @@ being refused the dependency.
 <string>Listens for sounds so you can find them. Audio stays on this device.</string>
 ```
 
+If you use [recording](#recording), say so in the string — "Listens to and
+records your practice so it can be played back. Recordings stay on this
+device." — because App Review reads it against what the app does.
+
 Without it, iOS **terminates the app** at `requestPermission()`.
 
 CocoaPods and Swift Package Manager are both supported, from the same source
@@ -103,7 +110,10 @@ tree (`ios/sound_recognition/Sources`). The example builds either way.
 Declared in the plugin's manifest and merged into yours, so there is nothing
 to add. Say so in the Play Data safety form: audio is *accessed*, and because
 it is processed only in memory and never stored or sent, Google's definitions
-do not count that as *collected*. Check the current form wording yourself.
+do not count that as *collected*. With [recording](#recording) on, audio *is*
+stored, on the device; data that never leaves the device is still not
+*collected* by Google's definitions, but check the current form wording
+yourself.
 
 The model and the LiteRT runtime together cost about **8.6 MB installed on an
 arm64 device** (4.1 MB model + 4.5 MB `libtensorflowlite_jni.so`, both stored
@@ -143,6 +153,63 @@ final subscription = recognition
 // already closed: listening to it later does not open the microphone.
 await subscription.cancel();
 ```
+
+### Recording
+
+Pass `recordTo:` and the microphone audio is also saved, so it can be played
+back later:
+
+```dart
+final path = '${(await getApplicationSupportDirectory()).path}/session-42.m4a';
+final subscription = recognition
+    .start(sounds: {CanonicalSound.piano}, recordTo: path)
+    .listen(onDetection);
+// …
+await subscription.cancel(); // the file is finalized here
+if (File(path).existsSync()) savePracticeRecording(path);
+```
+
+- **One pipeline.** The file is written from the same capture the classifier
+  reads — the `AVAudioEngine` input tap on iOS, the `AudioRecord` loop on
+  Android — never from a second recorder. Encoding runs on a thread of its
+  own, so it does not hold up classification.
+- **Format:** `.m4a` (MPEG-4), AAC-LC, mono, about 64 kbps — roughly
+  0.5 MB a minute, 29 MB an hour. **Android records at 16 kHz**, because that
+  is what YAMNet listens to: fine for hearing whether and what someone
+  played, not a hi-fi recording. iOS records at the mic's own rate (usually
+  48 kHz; 44.1 kHz if the input is outside 22.05–48 kHz).
+- **The path** must be absolute and end in `.m4a`, or `start()` throws an
+  `ArgumentError`. The directory must exist. A file already there is replaced.
+- **When it ends.** The file is finalized when listening stops for any
+  reason — `stop()`, cancelling the subscription, another `start()`, an
+  error — and at the **first `SoundListeningState.interrupted`**: a call,
+  Siri, another app taking the mic, and on Android the app going to the
+  background. Classification resumes after an interruption; the recording
+  does not, because an m4a cannot be appended to, and finalizing then means
+  a process killed in the background still leaves a playable file. To keep
+  recording, watch `stateChanges` and call `start()` again with a new path.
+  A route change on iOS (headphones in or out) is not an interruption, and
+  the recording carries on.
+- **Finalized when the future completes.** On iOS, `stop()` and
+  `subscription.cancel()` complete after the file is closed. On Android the
+  plugin waits up to a second for it, which is normally plenty.
+- **No audio, no file.** If nothing was captured (say the stream was
+  interrupted before audio arrived), no file is left, so a file that exists
+  is a playable one.
+- **Best effort.** If the file cannot be created or the encoder fails,
+  classification carries on without it and the stream sees nothing; the
+  reason is logged natively (`sound_recognition` in logcat, the device
+  console on iOS). The `SoundDetection` stream is deliberately unchanged, so
+  check that the file exists before offering playback.
+
+**The file is yours.** It exists only on the device — the plugin never sends
+it anywhere — and the app is responsible for it: where it lives, showing it,
+and **deleting it**. The plugin never deletes a finished recording. Mind
+backups: iOS backs up Documents and Application Support to iCloud, and
+Android Auto Backup includes app files, unless you exclude them. Tell the
+user plainly that audio is being saved (both platforms show their own mic
+indicator, which says *listening*, not *saving*), and remember that a
+recording of a room records whoever is in it.
 
 ### Detections are per label, not merged
 
@@ -286,6 +353,7 @@ YAMNet is Apache 2.0 (TensorFlow models); the AudioSet class names are CC BY
 $ xcrun swift tool/print_apple_labels.swift > tool/labels/apple_sound_classifier_version1.txt
 $ xcrun swift tool/classify_wav_apple.swift tool/test_audio/*.wav
 $ xcrun swift tool/classify_wav_apple_stream.swift tool/test_audio/*.wav
+$ xcrun swiftc -parse-as-library -o /tmp/rec ios/sound_recognition/Sources/sound_recognition/AudioFileRecorder.swift tool/record_wav_apple.swift && /tmp/rec /tmp tool/test_audio/*.wav
 $ python3 tool/classify_wav_yamnet.py tool/test_audio/*.wav     # pip install ai-edge-litert numpy
 $ cd example/android && ./gradlew :sound_recognition:connectedDebugAndroidTest
 ```
