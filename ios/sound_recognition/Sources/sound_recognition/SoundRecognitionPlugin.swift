@@ -72,6 +72,7 @@ public class SoundRecognitionPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
     let listener = SoundListener(
       minConfidence: (args["minConfidence"] as? NSNumber)?.doubleValue ?? 0.5,
       overlap: (args["overlap"] as? NSNumber)?.doubleValue ?? 0.5,
+      recordTo: args["recordTo"] as? String,
       onEvent: { events($0) },
       onError: { [weak self] code, message in
         events(FlutterError(code: code, message: message, details: nil))

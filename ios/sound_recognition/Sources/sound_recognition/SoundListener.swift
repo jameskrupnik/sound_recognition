@@ -28,10 +28,20 @@ import UIKit
 /// game's own audio plugin sets the category itself *after* this starts — a
 /// plain `.playback`, say — recording stops; configure it to `.playAndRecord`
 /// too, or start listening after it has set its category.
+///
+/// ### Recording
+///
+/// With `recordTo`, the tap's buffers also go to an [AudioFileRecorder]: the
+/// same capture the classifier reads, not a second recorder. The recording
+/// ends at the first interruption and on [stop]. An m4a cannot be appended
+/// to, and finalizing at the interruption means an app killed during a phone
+/// call still leaves a playable file. A route change is not an interruption:
+/// the tap is rebuilt and the recording carries on.
 @available(iOS 15.0, *)
 final class SoundListener: NSObject, SNResultsObserving {
   private let minConfidence: Double
   private let overlap: Double
+  private let recordTo: String?
   private let onEvent: ([String: Any]) -> Void
   private let onError: (String, String) -> Void
 
@@ -39,6 +49,8 @@ final class SoundListener: NSObject, SNResultsObserving {
   private var analyzer: SNAudioStreamAnalyzer?
   private let analysisQueue = DispatchQueue(label: "sound_recognition.analysis")
   private var observers: [NSObjectProtocol] = []
+  /// Read and written on the main thread only; the tap captures its own copy.
+  private var recorder: AudioFileRecorder?
   private var savedSession: (AVAudioSession.Category, AVAudioSession.Mode, AVAudioSession.CategoryOptions)?
 
   private let startedAt = Date()
@@ -51,12 +63,13 @@ final class SoundListener: NSObject, SNResultsObserving {
   private var stopped = false
 
   init(
-    minConfidence: Double, overlap: Double,
+    minConfidence: Double, overlap: Double, recordTo: String?,
     onEvent: @escaping ([String: Any]) -> Void,
     onError: @escaping (String, String) -> Void
   ) {
     self.minConfidence = minConfidence
     self.overlap = overlap
+    self.recordTo = recordTo
     self.onEvent = onEvent
     self.onError = onError
   }
@@ -66,7 +79,18 @@ final class SoundListener: NSObject, SNResultsObserving {
     savedSession = (session.category, session.mode, session.categoryOptions)
     try activateSession()
     observe()
+    if let recordTo {
+      // Nil when the file cannot be created: listening goes on without it.
+      recorder = AudioFileRecorder(
+        path: recordTo, inputFormat: engine.inputNode.outputFormat(forBus: 0))
+    }
     try startEngine()
+  }
+
+  /// Finalizes the recording, if any, without waiting.
+  private func endRecording() {
+    recorder?.finish()
+    recorder = nil
   }
 
   private func activateSession() throws {
@@ -83,6 +107,9 @@ final class SoundListener: NSObject, SNResultsObserving {
     observers.forEach(NotificationCenter.default.removeObserver)
     observers = []
     stopEngine()
+    // Waits, so the file is playable by the time Dart's cancel completes.
+    recorder?.finishAndWait()
+    recorder = nil
     // Put the game's category back, but do not deactivate the session: that
     // would stop the game's own audio mid-sound.
     if let (category, mode, options) = savedSession {
@@ -116,8 +143,10 @@ final class SoundListener: NSObject, SNResultsObserving {
     // tap's `when`, so each run's time ranges start at zero and the analyzer
     // sees a strictly increasing position whatever the hardware clock does.
     var framePosition: AVAudioFramePosition = 0
+    let recorder = self.recorder
     input.installTap(onBus: 0, bufferSize: 8192, format: format) { [weak self] buffer, _ in
       guard let self else { return }
+      recorder?.write(buffer)
       self.analysisQueue.async {
         analyzer.analyze(buffer, atAudioFramePosition: framePosition)
         framePosition += AVAudioFramePosition(buffer.frameLength)
@@ -157,6 +186,7 @@ final class SoundListener: NSObject, SNResultsObserving {
   private func markInterrupted() {
     guard !interrupted else { return }
     interrupted = true
+    endRecording()
     onEvent(["event": "state", "state": "interrupted"])
   }
 
@@ -195,6 +225,9 @@ final class SoundListener: NSObject, SNResultsObserving {
     // The media server crashed. Every audio object is now invalid.
     on(AVAudioSession.mediaServicesWereResetNotification) { [weak self] _ in
       guard let self, !self.stopped else { return }
+      // The old engine's encoder state is gone with the media server; keep
+      // what was recorded before the reset rather than risk writing on.
+      self.endRecording()
       self.analyzer = nil
       self.engine = AVAudioEngine()
       do {
