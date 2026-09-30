@@ -99,6 +99,7 @@ class SoundRecognitionPlugin :
       context,
       minConfidence = (args["minConfidence"] as? Number)?.toDouble() ?: 0.5,
       overlap = (args["overlap"] as? Number)?.toDouble() ?: 0.5,
+      recordTo = args["recordTo"] as? String,
       callbacks = object : MicrophoneListener.Callbacks {
         override fun onResult(timeMs: Long, labels: List<String>, confidences: List<Double>) {
           sink?.success(

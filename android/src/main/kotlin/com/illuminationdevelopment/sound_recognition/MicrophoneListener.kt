@@ -27,11 +27,21 @@ import android.os.SystemClock
  * [resume] from the activity lifecycle, because Android 9+ silences
  * background capture anyway and a paused `AudioRecord` releases the mic for
  * whatever the user switched to.
+ *
+ * ### Recording
+ *
+ * With [recordTo], the same PCM chunks the classifier reads are also handed to
+ * an [AacRecorder]. There is no second `AudioRecord`. The recording ends at the
+ * first interruption of any kind (pause, silencing, a failed start or read)
+ * and when listening stops: an m4a cannot be appended to, and finalizing at
+ * the interruption means a process killed in the background still leaves a
+ * playable file. Classification carries on either way.
  */
 internal class MicrophoneListener(
   private val context: Context,
   private val minConfidence: Double,
   private val overlap: Double,
+  private val recordTo: String?,
   private val callbacks: Callbacks,
 ) {
   enum class State { LISTENING, INTERRUPTED }
@@ -50,6 +60,7 @@ internal class MicrophoneListener(
   @Volatile private var paused = false
   @Volatile private var silenced = false
   @Volatile private var record: AudioRecord? = null
+  @Volatile private var recorder: AacRecorder? = null
   private var thread: Thread? = null
   private var recordingCallback: AudioManager.AudioRecordingCallback? = null
 
@@ -69,6 +80,7 @@ internal class MicrophoneListener(
     if (paused) return
     paused = true
     record?.let { runCatching { it.stop() } }
+    endRecording()
     post { callbacks.onState(State.INTERRUPTED) }
   }
 
@@ -83,15 +95,28 @@ internal class MicrophoneListener(
       post { callbacks.onError("MODEL_UNAVAILABLE", e.message ?: e.toString()) }
       return
     }
-    classifier.use {
-      while (running) {
-        if (paused) {
-          Thread.sleep(100)
-          continue
+    // Opened here, off the main thread, because it touches the file system.
+    // A null recorder just means no recording; AacRecorder logged why.
+    recorder = recordTo?.let { AacRecorder.open(it, YamnetClassifier.SAMPLE_RATE) }
+    try {
+      classifier.use {
+        while (running) {
+          if (paused) {
+            Thread.sleep(100)
+            continue
+          }
+          if (!captureSegment(it)) return
         }
-        if (!captureSegment(it)) return
       }
+    } finally {
+      // Covers stop(), start() replacing this listener, and fatal errors.
+      recorder?.finishAndWait(FINALIZE_MS)
     }
+  }
+
+  /** Finalizes the recording, if any, without waiting. Safe from any thread. */
+  private fun endRecording() {
+    recorder?.finish()
   }
 
   /**
@@ -121,6 +146,7 @@ internal class MicrophoneListener(
         // startRecording() fails *without throwing* while another holds the
         // mic (a call, a voice assistant). Reporting LISTENING here would be
         // a lie that never recovers; report an interruption and retry.
+        endRecording()
         post { callbacks.onState(State.INTERRUPTED) }
         Thread.sleep(RETRY_MS)
         return true
@@ -135,11 +161,14 @@ internal class MicrophoneListener(
           // after a pause so a persistent failure is not a busy loop.
           // (A read cut short by stop() or pause() is not a failure.)
           if (running && !paused) {
+            endRecording()
             post { callbacks.onState(State.INTERRUPTED) }
             Thread.sleep(RETRY_MS)
           }
           break
         }
+        // Silenced audio is zeros, and silencing ends the recording anyway.
+        if (!silenced) recorder?.write(chunk, n)
         assembler.push(chunk, n)
       }
     } catch (e: IllegalStateException) {
@@ -201,6 +230,7 @@ internal class MicrophoneListener(
         val nowSilenced = mine.isClientSilenced
         if (nowSilenced == silenced) return
         silenced = nowSilenced
+        if (nowSilenced) endRecording()
         callbacks.onState(if (nowSilenced) State.INTERRUPTED else State.LISTENING)
       }
     }
@@ -221,5 +251,6 @@ internal class MicrophoneListener(
 
   private companion object {
     const val RETRY_MS = 1_000L
+    const val FINALIZE_MS = 2_000L
   }
 }
