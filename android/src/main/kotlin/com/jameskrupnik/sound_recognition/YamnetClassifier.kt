@@ -1,4 +1,4 @@
-package com.illuminationdevelopment.sound_recognition
+package com.jameskrupnik.sound_recognition
 
 import android.content.res.AssetManager
 import java.io.Closeable

@@ -1,4 +1,4 @@
-package com.illuminationdevelopment.sound_recognition
+package com.jameskrupnik.sound_recognition
 
 /**
  * Cuts a stream of samples into overlapping fixed-size windows.

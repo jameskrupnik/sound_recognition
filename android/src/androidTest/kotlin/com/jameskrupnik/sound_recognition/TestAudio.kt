@@ -1,4 +1,4 @@
-package com.illuminationdevelopment.sound_recognition
+package com.jameskrupnik.sound_recognition
 
 import androidx.test.platform.app.InstrumentationRegistry
 import java.nio.ByteBuffer

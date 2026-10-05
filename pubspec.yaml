@@ -23,7 +23,7 @@ flutter:
   plugin:
     platforms:
       android:
-        package: com.illuminationdevelopment.sound_recognition
+        package: com.jameskrupnik.sound_recognition
         pluginClass: SoundRecognitionPlugin
       ios:
         pluginClass: SoundRecognitionPlugin

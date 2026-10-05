@@ -1,4 +1,4 @@
-group = "com.illuminationdevelopment.sound_recognition"
+group = "com.jameskrupnik.sound_recognition"
 version = "0.1.0"
 
 buildscript {
@@ -26,7 +26,7 @@ plugins {
 }
 
 android {
-    namespace = "com.illuminationdevelopment.sound_recognition"
+    namespace = "com.jameskrupnik.sound_recognition"
 
     compileSdk = 36
 

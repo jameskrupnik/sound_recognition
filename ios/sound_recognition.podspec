@@ -9,7 +9,7 @@ plugin's Android half. No model to ship and no network.
                        DESC
   s.homepage         = 'https://github.com/jameskrupnik/sound_recognition'
   s.license          = { :file => '../LICENSE' }
-  s.author           = { 'Illumination Development' => 'james.krupnik@illuminationdevelopment.com' }
+  s.author           = { 'James Krupnik' => 'jameskrupnik@gmail.com' }
   s.source           = { :path => '.' }
   # One source tree for both package managers: CocoaPods reads the Swift
   # Package's sources in place rather than keeping a second copy in Classes/.
