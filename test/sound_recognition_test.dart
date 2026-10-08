@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sound_recognition/sound_recognition.dart';
+import 'package:sound_recognition/src/sound_recognition_exception.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -205,6 +206,7 @@ void main() {
       sink!
         ..success({'event': 'state', 'state': 'listening'})
         ..success({'event': 'state', 'state': 'interrupted'})
+        ..success({'event': 'state', 'state': 'somethingNewer'})
         ..success({'event': 'state', 'state': 'listening'});
       await pumpEventQueue();
       expect(recognition.state, SoundListeningState.listening);
@@ -238,10 +240,50 @@ void main() {
     });
 
     test('an unknown error code maps to unknown', () {
-      final e = SoundRecognitionException.from(
+      final e = toSoundRecognitionException(
         PlatformException(code: 'SOMETHING_NEW'),
       );
       expect(e.code, SoundRecognitionErrorCode.unknown);
+    });
+
+    test('every native error code maps to its enum value', () {
+      const codes = {
+        'PERMISSION_DENIED': SoundRecognitionErrorCode.permissionDenied,
+        'UNSUPPORTED': SoundRecognitionErrorCode.unsupported,
+        'AUDIO_UNAVAILABLE': SoundRecognitionErrorCode.audioUnavailable,
+        'MODEL_UNAVAILABLE': SoundRecognitionErrorCode.modelUnavailable,
+      };
+      for (final MapEntry(key: wire, value: code) in codes.entries) {
+        final e = toSoundRecognitionException(PlatformException(code: wire));
+        expect(e.code, code, reason: wire);
+      }
+    });
+
+    test('a non-platform error maps to unknown with its text', () {
+      final e = toSoundRecognitionException(StateError('boom'));
+      expect(e.code, SoundRecognitionErrorCode.unknown);
+      expect(e.message, contains('boom'));
+    });
+
+    test('an exception that is already typed passes through', () {
+      const original =
+          SoundRecognitionException(SoundRecognitionErrorCode.unsupported);
+      expect(toSoundRecognitionException(original), same(original));
+    });
+
+    test('an exception names its code and any message', () {
+      expect(
+        const SoundRecognitionException(SoundRecognitionErrorCode.unsupported)
+            .toString(),
+        'SoundRecognitionException(unsupported)',
+      );
+      expect(
+        const SoundRecognitionException(
+          SoundRecognitionErrorCode.permissionDenied,
+          'no mic',
+        ).toString(),
+        'SoundRecognitionException(permissionDenied: no mic)',
+      );
     });
 
     test('a second start closes the first stream', () async {

@@ -1,0 +1,43 @@
+# pub reads this file *instead of* .gitignore in this directory, so the
+# .gitignore rules are repeated here. Keep the two in step.
+#
+# Excluded from the published package only:
+# tool/test_audio/ holds the WAV clips the Android instrumented test and the
+# desktop tool/ scripts classify. Nothing in lib/, test/ or example/ reads
+# them, and they are ~0.7 MB of a package that already carries a 4 MB model.
+# The tests that read tool/labels/ still need it, so that stays.
+tool/test_audio/
+
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+# Libraries should not include pubspec.lock, per https://dart.dev/guides/libraries/private-files#pubspeclock.
+/pubspec.lock
+**/doc/api/
+.dart_tool/
+.flutter-plugins-dependencies
+/build/
+/coverage/

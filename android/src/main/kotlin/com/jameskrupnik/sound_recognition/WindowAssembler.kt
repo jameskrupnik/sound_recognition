@@ -1,5 +1,7 @@
 package com.jameskrupnik.sound_recognition
 
+import kotlin.math.roundToInt
+
 /**
  * Cuts a stream of samples into overlapping fixed-size windows.
  *
@@ -15,7 +17,9 @@ internal class WindowAssembler(
   overlap: Double,
   private val onWindow: (window: FloatArray, startSample: Long) -> Unit,
 ) {
-  val hop: Int = maxOf(1, (windowSize * (1 - overlap)).toInt())
+  // Rounded, not truncated: 1 - 0.8 is 0.19999… in binary, and truncating
+  // made the hop a sample short at 0.8 and 0.9.
+  val hop: Int = maxOf(1, (windowSize * (1 - overlap)).roundToInt())
   private val buffer = FloatArray(windowSize)
   private var filled = 0
   private var consumed = 0L
@@ -38,8 +42,15 @@ internal class WindowAssembler(
     }
   }
 
-  /** Forgets partial audio — after a gap, the old half-window is not adjacent to the new one. */
-  fun reset() {
+  /**
+   * Accounts for [count] samples that were captured but must not be
+   * classified (the microphone was silenced), and forgets the partial window:
+   * audio from before the gap is not adjacent to audio after it. The next
+   * window starts at the first sample pushed afterwards, and its start
+   * position still counts the skipped samples, so timestamps stay true.
+   */
+  fun skip(count: Int) {
+    consumed += filled + count
     filled = 0
   }
 }

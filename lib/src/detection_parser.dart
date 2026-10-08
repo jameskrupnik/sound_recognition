@@ -25,7 +25,7 @@ abstract final class DetectionParser {
   /// and a newer native half speaking a vocabulary this Dart does not know
   /// cannot be mapped anyway.
   static List<SoundDetection> parse(Map<Object?, Object?> event) {
-    final classifier = SoundClassifier.fromWireName(
+    final classifier = classifierFromWireName(
       event['classifier'] as String? ?? '',
     );
     final timeMs = event['timeMs'];

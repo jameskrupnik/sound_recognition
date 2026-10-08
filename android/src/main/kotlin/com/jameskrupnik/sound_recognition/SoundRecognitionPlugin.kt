@@ -40,7 +40,6 @@ class SoundRecognitionPlugin :
   private var binding: ActivityPluginBinding? = null
   private var pendingPermission: MethodChannel.Result? = null
   private var listener: MicrophoneListener? = null
-  private var sink: EventChannel.EventSink? = null
   private var engine: FlutterEngine? = null
 
   // Hot restart replaces the Dart isolate without cancelling the event
@@ -88,21 +87,26 @@ class SoundRecognitionPlugin :
 
   override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
     stopListening()
-    sink = events
     if (!hasPermission()) {
       events.error("PERMISSION_DENIED", "RECORD_AUDIO is not granted", null)
-      sink = null
       return
     }
     val args = arguments as? Map<*, *> ?: emptyMap<String, Any>()
-    val listener = MicrophoneListener(
+    // Each listener talks only to the sink it was started for, and only while
+    // it is still the current listener. Anything an old listener had already
+    // queued on the main thread when it was replaced is dropped here rather
+    // than delivered into the new session.
+    lateinit var created: MicrophoneListener
+    fun current() = listener === created
+    created = MicrophoneListener(
       context,
       minConfidence = (args["minConfidence"] as? Number)?.toDouble() ?: 0.5,
       overlap = (args["overlap"] as? Number)?.toDouble() ?: 0.5,
       recordTo = args["recordTo"] as? String,
       callbacks = object : MicrophoneListener.Callbacks {
         override fun onResult(timeMs: Long, labels: List<String>, confidences: List<Double>) {
-          sink?.success(
+          if (!current()) return
+          events.success(
             mapOf(
               "event" to "result",
               "classifier" to "yamnet",
@@ -114,25 +118,28 @@ class SoundRecognitionPlugin :
         }
 
         override fun onState(state: MicrophoneListener.State) {
-          sink?.success(mapOf("event" to "state", "state" to state.name.lowercase()))
+          if (!current()) return
+          events.success(mapOf("event" to "state", "state" to state.name.lowercase()))
         }
 
         override fun onError(code: String, message: String) {
-          sink?.error(code, message, null)
+          if (!current()) return
+          events.error(code, message, null)
           stopListening()
         }
       },
     )
-    this.listener = listener
-    listener.start()
+    listener = created
+    created.start()
   }
 
   override fun onCancel(arguments: Any?) = stopListening()
 
   private fun stopListening() {
-    listener?.stop()
+    val stopping = listener ?: return
+    // Cleared first: callbacks the stop itself triggers are no longer current.
     listener = null
-    sink = null
+    stopping.stop()
   }
 
   // --- Permission ----------------------------------------------------------

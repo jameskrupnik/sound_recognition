@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:sound_recognition/src/canonical_sound.dart';
 import 'package:sound_recognition/src/sound_labels.dart';
+import 'package:sound_recognition/src/sound_listening_state.dart';
 
 /// One label that cleared the confidence floor in one analysis window.
 ///
@@ -12,7 +13,9 @@ import 'package:sound_recognition/src/sound_labels.dart';
 /// only cares whether the dog was heard checks [sound] and takes the first.
 @immutable
 class SoundDetection {
-  /// Creates a detection. Normally built by the plugin, not by apps.
+  /// Creates a detection.
+  ///
+  /// Normally built by the plugin, not by apps.
   const SoundDetection({
     required this.rawLabel,
     required this.confidence,
@@ -25,8 +28,9 @@ class SoundDetection {
   /// the canonical set — `theremin`, `Heavy metal`, `Silence`.
   final CanonicalSound? sound;
 
-  /// The label exactly as the platform classifier named it. Only meaningful
-  /// against [classifier]'s vocabulary: `dog_bark` on iOS, `Bark` on Android.
+  /// The label exactly as the platform classifier named it.
+  ///
+  /// Only meaningful against [classifier]'s vocabulary: `dog_bark` on iOS, `Bark` on Android.
   final String rawLabel;
 
   /// The classifier's score for [rawLabel], 0 to 1.
@@ -38,9 +42,17 @@ class SoundDetection {
   /// platform if it matters.
   final double confidence;
 
-  /// When the analysed window *began*, measured from the moment listening
-  /// started. A window is about one second long, so the sound itself was
+  /// When the analysed window *began*, measured from when the stream that
+  /// delivered it started listening.
+  ///
+  /// A window is about one second long, so the sound itself was
   /// somewhere in `[timestamp, timestamp + 975 ms]`.
+  ///
+  /// The clock belongs to one `start()`: every call to `start()` counts from
+  /// zero again, including one made after `stop()`. Within one stream it keeps
+  /// rising across a [SoundListeningState.interrupted] spell, which it
+  /// includes, so times stay in order and a gap shows where the interruption
+  /// was. Both platforms follow this rule.
   final Duration timestamp;
 
   /// Which platform classifier produced [rawLabel].

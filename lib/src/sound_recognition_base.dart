@@ -32,14 +32,20 @@ import 'package:sound_recognition/src/sound_recognition_exception.dart';
 class SoundRecognition {
   SoundRecognition._();
 
-  /// The one instance. There is one microphone, so there is one listener.
+  /// The one instance.
+  ///
+  /// There is one microphone, so there is one listener.
   static final SoundRecognition instance = SoundRecognition._();
 
-  /// The method channel. Exposed only so tests can mock it.
+  /// The method channel.
+  ///
+  /// Exposed only so tests can mock it.
   @visibleForTesting
   static const MethodChannel methodChannel = MethodChannel('sound_recognition');
 
-  /// The detection event channel. Exposed only so tests can mock it.
+  /// The detection event channel.
+  ///
+  /// Exposed only so tests can mock it.
   @visibleForTesting
   static const EventChannel eventChannel =
       EventChannel('sound_recognition/events');
@@ -73,7 +79,9 @@ class SoundRecognition {
       _permission('permissionStatus');
 
   /// Prompts for the microphone if the platform still will, and returns the
-  /// outcome. Returns at once, without a prompt, when already decided.
+  /// outcome.
+  ///
+  /// Returns at once, without a prompt, when already decided.
   ///
   /// The prompt's text on iOS is the app's `NSMicrophoneUsageDescription`;
   /// without that key iOS terminates the app at this call, not later.
@@ -89,7 +97,9 @@ class SoundRecognition {
   }
 
   /// Every raw label this platform's classifier can produce — for going past
-  /// [CanonicalSound], or for building a picker. About 300 on iOS, 521 on
+  /// [CanonicalSound], or for building a picker.
+  ///
+  /// About 300 on iOS, 521 on
   /// Android, and the two lists share almost no spellings.
   Future<List<String>> knownLabels() async {
     final labels = await methodChannel.invokeListMethod<String>('knownLabels');
@@ -99,7 +109,9 @@ class SoundRecognition {
   /// The current [SoundListeningState].
   SoundListeningState get state => _state;
 
-  /// Every change to [state]. Broadcast, and does not replay the current
+  /// Every change to [state].
+  ///
+  /// Broadcast, and does not replay the current
   /// value — read [state] first.
   Stream<SoundListeningState> get stateChanges => _states.stream;
 
@@ -188,7 +200,7 @@ class SoundRecognition {
           (event) => _onEvent(event, controller, wanted),
           onError: (Object error, StackTrace stackTrace) {
             controller.addError(
-              SoundRecognitionException.from(error),
+              toSoundRecognitionException(error),
               stackTrace,
             );
             if (identical(_controller, controller)) unawaited(stop());
@@ -222,8 +234,9 @@ class SoundRecognition {
     }
   }
 
-  /// Stops listening and closes the stream [start] returned. Safe to call
-  /// when not listening.
+  /// Stops listening and closes the stream [start] returned.
+  ///
+  /// Safe to call when not listening.
   Future<void> stop() async {
     final controller = _controller;
     await _release();
@@ -246,8 +259,10 @@ class SoundRecognition {
     _states.add(state);
   }
 
-  /// Test seam: drop any active stream without talking to the platform, so
-  /// one test's listener cannot leak into the next through [instance].
+  /// Drops any active stream without talking to the platform.
+  ///
+  /// A test seam, so one test's listener cannot leak into the next through
+  /// [instance].
   @visibleForTesting
   void debugReset() {
     _controller = null;

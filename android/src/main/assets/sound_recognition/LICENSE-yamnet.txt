@@ -1,6 +1,13 @@
 YAMNet model and class names, Copyright Google LLC.
 Source: https://github.com/tensorflow/models/tree/master/research/audioset/yamnet
 
+The class names are from Google's AudioSet ontology
+(https://research.google.com/audioset/), licensed under the Creative Commons
+Attribution 4.0 International licence (CC BY 4.0):
+https://creativecommons.org/licenses/by/4.0/
+
+The model is licensed under the Apache License 2.0, below.
+
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/

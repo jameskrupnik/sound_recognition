@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Listens for sounds so you can find them. Audio stays on this device and is never recorded.</string>
+	<string>Listens for sounds so you can find them. Audio stays on this device, and is saved only when you turn on Save audio.</string>
 	<key>CFBundleName</key>
 	<string>sound_recognition_example</string>
 	<key>CFBundlePackageType</key>

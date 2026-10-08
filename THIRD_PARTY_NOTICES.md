@@ -19,7 +19,9 @@ full licence text is in `android/src/main/assets/sound_recognition/LICENSE-yamne
 which ships inside every app that uses this plugin, beside the model.
 
 YAMNet's class names come from Google's AudioSet ontology,
-`https://research.google.com/audioset/`, published under CC BY 4.0.
+`https://research.google.com/audioset/`, published under CC BY 4.0
+(`https://creativecommons.org/licenses/by/4.0/`). That attribution is also
+at the top of `LICENSE-yamnet.txt`, so it ships with the names.
 
 ## Apple SoundAnalysis labels
 

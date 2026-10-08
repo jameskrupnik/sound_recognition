@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sound_recognition/sound_recognition.dart';
+import 'package:sound_recognition/src/sound_labels.dart';
 
 /// The test that keeps the mapping honest.
 ///
@@ -130,11 +131,13 @@ void main() {
     }
   });
 
-  test('wire names round-trip', () {
-    for (final classifier in SoundClassifier.values) {
-      expect(SoundClassifier.fromWireName(classifier.wireName), classifier);
-    }
-    expect(SoundClassifier.fromWireName('something_newer'), isNull);
+  test('wire names map to classifiers', () {
+    expect(
+      classifierFromWireName('apple_sound_analysis_v1'),
+      SoundClassifier.appleVersion1,
+    );
+    expect(classifierFromWireName('yamnet'), SoundClassifier.yamnet);
+    expect(classifierFromWireName('something_newer'), isNull);
   });
 }
 

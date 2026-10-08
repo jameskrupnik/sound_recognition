@@ -37,8 +37,17 @@ import UIKit
 /// to, and finalizing at the interruption means an app killed during a phone
 /// call still leaves a playable file. A route change is not an interruption:
 /// the tap is rebuilt and the recording carries on.
+///
+/// ### Timestamps
+///
+/// A result's time is when its window began, in milliseconds since this
+/// listener was created — since this `start()` began listening, so each
+/// `start()` counts from zero again. Each engine run's results are offset by
+/// the wall-clock time from then to the run's start, so times keep rising
+/// across an interruption and include the time spent interrupted. Android
+/// follows the same rule.
 @available(iOS 15.0, *)
-final class SoundListener: NSObject, SNResultsObserving {
+final class SoundListener: NSObject {
   private let minConfidence: Double
   private let overlap: Double
   private let recordTo: String?
@@ -47,6 +56,8 @@ final class SoundListener: NSObject, SNResultsObserving {
 
   private var engine = AVAudioEngine()
   private var analyzer: SNAudioStreamAnalyzer?
+  /// The current run's observer. The analyzer does not keep it alive.
+  private var runObserver: RunObserver?
   private let analysisQueue = DispatchQueue(label: "sound_recognition.analysis")
   private var observers: [NSObjectProtocol] = []
   /// Read and written on the main thread only; the tap captures its own copy.
@@ -54,11 +65,6 @@ final class SoundListener: NSObject, SNResultsObserving {
   private var savedSession: (AVAudioSession.Category, AVAudioSession.Mode, AVAudioSession.CategoryOptions)?
 
   private let startedAt = Date()
-  /// Seconds from `startedAt` to the start of the current engine run. Results'
-  /// time ranges are relative to the run, so this keeps timestamps rising
-  /// across an interruption instead of restarting at zero — the same rule the
-  /// Android side follows.
-  private var segmentStart: TimeInterval = 0
   private var interrupted = false
   private var stopped = false
 
@@ -135,9 +141,16 @@ final class SoundListener: NSObject, SNResultsObserving {
     request.windowDuration = CMTime(value: 975, timescale: 1000)
     request.overlapFactor = overlap
     let analyzer = SNAudioStreamAnalyzer(format: format)
-    try analyzer.add(request, withObserver: self)
+    // Results' time ranges are relative to this run. The offset is fixed per
+    // run, in the run's own observer, rather than read from a property when
+    // a result arrives: the results `completeAnalysis()` flushes from the
+    // previous run arrive after the next run has started, and would otherwise
+    // be stamped with the new run's offset.
+    let observer = RunObserver(
+      listener: self, offset: Date().timeIntervalSince(startedAt))
+    try analyzer.add(request, withObserver: observer)
     self.analyzer = analyzer
-    segmentStart = Date().timeIntervalSince(startedAt)
+    runObserver = observer
 
     // Frame positions are counted here from zero rather than taken from the
     // tap's `when`, so each run's time ranges start at zero and the analyzer
@@ -162,9 +175,15 @@ final class SoundListener: NSObject, SNResultsObserving {
     engine.inputNode.removeTap(onBus: 0)
     engine.stop()
     if let analyzer {
-      analysisQueue.async { analyzer.completeAnalysis() }
+      // Holds the run's observer until the last of its results are out.
+      let observer = runObserver
+      analysisQueue.async {
+        analyzer.completeAnalysis()
+        withExtendedLifetime(observer) {}
+      }
     }
     analyzer = nil
+    runObserver = nil
   }
 
   /// Tears the pipeline down and builds it again against whatever the input
@@ -229,6 +248,7 @@ final class SoundListener: NSObject, SNResultsObserving {
       // what was recorded before the reset rather than risk writing on.
       self.endRecording()
       self.analyzer = nil
+      self.runObserver = nil
       self.engine = AVAudioEngine()
       do {
         try self.activateSession()
@@ -245,9 +265,10 @@ final class SoundListener: NSObject, SNResultsObserving {
     }
   }
 
-  // MARK: - SNResultsObserving
+  // MARK: - Results
 
-  func request(_ request: SNRequest, didProduce result: SNResult) {
+  /// Called on the analysis queue with the run's offset.
+  fileprivate func deliver(_ result: SNResult, runOffset: TimeInterval) {
     guard let result = result as? SNClassificationResult else { return }
     // Sorted by confidence, so stop at the first one under the floor.
     var labels: [String] = []
@@ -258,23 +279,43 @@ final class SoundListener: NSObject, SNResultsObserving {
       confidences.append(c.confidence)
     }
     guard !labels.isEmpty else { return }
-    let start = result.timeRange.start.seconds
+    let timeMs = Int(((runOffset + result.timeRange.start.seconds) * 1000).rounded())
     DispatchQueue.main.async { [weak self] in
       guard let self, !self.stopped else { return }
       self.onEvent([
         "event": "result",
         "classifier": "apple_sound_analysis_v1",
-        "timeMs": Int((self.segmentStart + start) * 1000),
+        "timeMs": timeMs,
         "labels": labels,
         "confidences": confidences,
       ])
     }
   }
 
-  func request(_ request: SNRequest, didFailWithError error: Error) {
+  fileprivate func fail(_ error: Error) {
     DispatchQueue.main.async { [weak self] in
       guard let self, !self.stopped else { return }
       self.onError("UNKNOWN", error.localizedDescription)
     }
+  }
+}
+
+/// One engine run's results, stamped with that run's offset.
+@available(iOS 15.0, *)
+private final class RunObserver: NSObject, SNResultsObserving {
+  private weak var listener: SoundListener?
+  private let offset: TimeInterval
+
+  init(listener: SoundListener, offset: TimeInterval) {
+    self.listener = listener
+    self.offset = offset
+  }
+
+  func request(_ request: SNRequest, didProduce result: SNResult) {
+    listener?.deliver(result, runOffset: offset)
+  }
+
+  func request(_ request: SNRequest, didFailWithError error: Error) {
+    listener?.fail(error)
   }
 }

@@ -40,17 +40,30 @@ class _HuntPageState extends State<HuntPage> {
   late CanonicalSound _target = _pool[_random.nextInt(_pool.length)];
   StreamSubscription<SoundDetection>? _subscription;
   SoundDetection? _found;
+  String? _error;
 
   void _listen() {
-    setState(() => _found = null);
-    _subscription = SoundRecognition.instance
-        .start(minConfidence: 0.4, sounds: {_target}).listen((d) {
-      unawaited(_subscription?.cancel());
-      setState(() {
-        _subscription = null;
-        _found = d;
-      });
+    setState(() {
+      _found = null;
+      _error = null;
     });
+    // onError and onDone both matter: without them a failure is an uncaught
+    // error, and a stream ended elsewhere (the Live tab starting, a stop())
+    // leaves this page "Listening…" with its button disabled for good.
+    _subscription = SoundRecognition.instance
+        .start(minConfidence: 0.4, sounds: {_target}).listen(
+      (d) {
+        unawaited(_subscription?.cancel());
+        setState(() {
+          _subscription = null;
+          _found = d;
+        });
+      },
+      onError: (Object e) => setState(() => _error = e.toString()),
+      onDone: () {
+        if (mounted) setState(() => _subscription = null);
+      },
+    );
     setState(() {});
   }
 
@@ -59,6 +72,7 @@ class _HuntPageState extends State<HuntPage> {
     setState(() {
       _subscription = null;
       _found = null;
+      _error = null;
       _target =
           (_pool.toList()..remove(_target))[_random.nextInt(_pool.length - 1)];
     });
@@ -74,6 +88,7 @@ class _HuntPageState extends State<HuntPage> {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final found = _found;
+    final error = _error;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -89,6 +104,11 @@ class _HuntPageState extends State<HuntPage> {
                 'Found it! (${found.rawLabel}, '
                 '${(found.confidence * 100).round()}%)',
                 style: text.titleLarge,
+              )
+            else if (error != null)
+              Text(
+                error,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
               )
             else if (_subscription != null)
               const Text('Listening…'),

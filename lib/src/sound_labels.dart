@@ -4,32 +4,31 @@ import 'package:sound_recognition/src/labels_yamnet.dart';
 
 /// Which label set a detection's raw label comes from.
 ///
-/// The wire name is what the native side sends with every result, so the
-/// label set is stated by the code that produced the label rather than
-/// inferred in Dart from the platform it happens to be running on.
+/// The native side names its classifier on every result, so the label set is
+/// stated by the code that produced the label rather than inferred in Dart
+/// from the platform it happens to be running on.
 enum SoundClassifier {
   /// `SNClassifySoundRequest(classifierIdentifier: .version1)` on iOS 15+.
+  ///
   /// Identifiers are snake_case: `dog_bark`.
-  appleVersion1('apple_sound_analysis_v1'),
+  appleVersion1,
 
-  /// YAMNet (AudioSet ontology, 521 classes) on Android. Labels are the
-  /// AudioSet display names: `Bark`, `Vehicle horn, car horn, honking`.
-  yamnet('yamnet');
-
-  const SoundClassifier(this.wireName);
-
-  /// The name the native side uses for this classifier on the channel.
-  final String wireName;
-
-  /// The classifier with [wireName], or null for one this version of the
-  /// package does not know — a newer native half against an older Dart one.
-  static SoundClassifier? fromWireName(String wireName) {
-    for (final classifier in values) {
-      if (classifier.wireName == wireName) return classifier;
-    }
-    return null;
-  }
+  /// YAMNet (AudioSet ontology, 521 classes) on Android.
+  ///
+  /// Labels are the AudioSet display names: `Bark`, `Vehicle horn, car horn, honking`.
+  yamnet,
 }
+
+/// The classifier the native side calls [wireName], or null for one this
+/// version of the package does not know — a newer native half against an
+/// older Dart one.
+///
+/// Not exported: the wire names are the channel protocol, not API.
+SoundClassifier? classifierFromWireName(String wireName) => switch (wireName) {
+      'apple_sound_analysis_v1' => SoundClassifier.appleVersion1,
+      'yamnet' => SoundClassifier.yamnet,
+      _ => null,
+    };
 
 /// The mapping from each [CanonicalSound] to the raw labels that mean it.
 ///

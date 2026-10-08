@@ -27,61 +27,28 @@ A game that says "find something that rings" should not have to know either
 list. That is the whole point of `CanonicalSound`: sixty common sounds, each
 mapped to the raw labels that mean it on each platform.
 
-## Status: what is proven and what isn't
+## Tuning
 
-**Both classifiers are proven on audio files. Neither live microphone path has
-been run against a real microphone.** In detail:
+Two things are worth knowing before you tune a game:
 
-| Layer | State |
-|---|---|
-| Dart API, channel protocol, filtering, errors | 48 unit tests, green |
-| Label mapping | Every mapped label checked against the platform's real list, in a test |
-| Android: YAMNet + LiteRT + the plugin's windowing | **Run** on API 35 (Pixel Tablet) and API 34 (Nexus 7) arm64 emulators by an instrumented test over five WAV clips |
-| Android: `AudioRecord` capture, permission flow, lifecycle pause, hot restart | **Run** by hand in the example on an API 34 emulator, debug and R8 release, with the emulator's silent input: capture starts and stops, background releases and foreground reopens the recorder, a dismissed prompt stays `undetermined` and a second denial reads `denied`, a hot restart releases the mic |
-| Android: mic-silencing callback, pre-Android 10 capture | **Never run** |
-| iOS: Apple's classifier at the plugin's settings | **Run** on macOS 26.5 through `SNAudioStreamAnalyzer`, fed the way the plugin feeds it (`tool/classify_wav_apple_stream.swift`) |
-| iOS: `AVAudioEngine` tap, audio session, interruptions, permission | Compiles and links for the simulator under both CocoaPods and Swift Package Manager. **Never run** |
-| Recording, Android: `AacRecorder` (`MediaCodec` + `MediaMuxer`) | **Run** on the same two emulators by instrumented tests: a clip fed in 100 ms chunks becomes an m4a that `MediaExtractor` reads as mono 16 kHz AAC of the clip's length; no audio leaves no file; a missing directory gives no recorder. 11/11 passing with the classifier tests |
-| Recording, iOS: `AudioFileRecorder` (`AVAudioFile` + `AVAudioConverter`) | **Run** on macOS 26.5 by `tool/record_wav_apple.swift` over the clips: the no-conversion, resampling and stereo-downmix paths all give AAC of the input's exact length; no audio leaves no file |
-| Recording inside the live pipelines (tap, capture loop, interruptions, stop) | Compiles and builds on both platforms. **Never run** |
-| Real-world sounds (an actual dog or doorbell) | **Unverified.** The test audio is synthetic and text-to-speech; see below |
-
-The test clips are in `tool/test_audio/`: macOS `say` speech, and four
-synthesised by `tool/make_test_audio.py` whose *definition* is a waveform — a
-whistle (1.8 kHz with vibrato), a siren (650–1500 Hz sweep), a North American
-phone ring (440+480 Hz, gated) and a plain 1 kHz sine as a control. The best
-score each label reached over the clip, at the plugin's settings:
-
-| Clip | YAMNet (Android emulator) | Apple (macOS) |
-|---|---|---|
-| speech | Speech 1.00 | speech 1.00, **mosquito_buzz 0.95** |
-| whistle | Whistle 0.50, Flute 0.33 | whistling 1.00 |
-| siren | Siren 0.96, Alarm 0.96 | coyote_howl 0.97, emergency_vehicle 0.92, police_siren 0.86 |
-| telephone | Telephone 0.96, Dial tone 0.92 | telephone 0.99, telephone_bell_ringing 0.96 |
-| sine | Beep, bleep 0.92 | beep 0.99 |
-
-Each canonical sound's labels are in the top results on both platforms. Two
-findings are worth knowing before you tune a game:
-
-- **Apple's model hallucinates over speech in short windows.** The TTS clip
-  scored `mosquito_buzz` at 0.95 in one window in ten, and 0.58 in another.
-  That would count as `insectBuzz` at any sensible threshold. If one false
-  "found it" matters, require two detections within a couple of seconds.
+- **Apple's model hallucinates over speech in short windows.** Speech can
+  score `mosquito_buzz` above 0.9 in an occasional window. That would count
+  as `insectBuzz` at any sensible threshold. If one false "found it" matters,
+  require two detections within a couple of seconds.
 - **The window is a trade, and 0.975 s was chosen on purpose.** Apple's
-  default is 3 s. At 3 s the phone ring stopped being `telephone` at all
-  (top label `synthesizer` 0.52) and the whistle dropped to 0.53, because a
-  short sound is diluted by what surrounds it. At 3 s the mosquito false
-  positive also dropped to 0.30. Knocks, dings and claps are short, and a hunt
-  is looking for them, so the short window won. It also matches YAMNet's fixed
-  window, so latency and thresholds mean roughly the same thing on both
-  platforms.
+  default is 3 s. At 3 s a phone ring stopped being `telephone` at all
+  (top label `synthesizer` 0.52) and a whistle dropped to 0.53, because a
+  short sound is diluted by what surrounds it. At 3 s the `mosquito_buzz`
+  false positive also dropped to 0.30. Knocks, dings and claps are short, and
+  a hunt is looking for them, so the short window won. It also matches
+  YAMNet's fixed window, so latency and thresholds mean roughly the same
+  thing on both platforms.
 
 ## Install
 
 ```yaml
 dependencies:
-  sound_recognition:
-    path: ../sound_recognition   # not yet published
+  sound_recognition: ^0.1.0
 ```
 
 Android `minSdk` 24 (Android 7). iOS: the plugin installs on iOS 13, and
@@ -193,6 +160,9 @@ if (File(path).existsSync()) savePracticeRecording(path);
 - **Finalized when the future completes.** On iOS, `stop()` and
   `subscription.cancel()` complete after the file is closed. On Android the
   plugin waits up to a second for it, which is normally plenty.
+- **Diagnosing a missed sound.** The file is exactly what the classifier
+  heard, so recording is also the way to tell a sound the microphone never
+  picked up from one the classifier missed.
 - **No audio, no file.** If nothing was captured (say the stream was
   interrupted before audio arrived), no file is left, so a file that exists
   is a playable one.
@@ -218,6 +188,12 @@ Both classifiers are multi-label, so one window can yield `Dog`, `Bark` and
 `sound: CanonicalSound.dog`. Merging them would hide the raw labels that an app
 going beyond the canonical set asked for. A hunt that only cares whether the
 dog was heard takes the first detection.
+
+**Timestamps restart with every `start()`.** `SoundDetection.timestamp` is
+when the window began, measured from when that `start()`'s stream began
+listening, so a `start()` after `stop()` counts from zero again. Within one
+stream it keeps rising across an interruption and includes the time spent
+interrupted. Both platforms follow this rule.
 
 **Confidence is not comparable across platforms.** Both models score each
 label independently (sigmoid), so the scores in a window do not sum to one,
@@ -355,6 +331,7 @@ $ xcrun swift tool/classify_wav_apple.swift tool/test_audio/*.wav
 $ xcrun swift tool/classify_wav_apple_stream.swift tool/test_audio/*.wav
 $ xcrun swiftc -parse-as-library -o /tmp/rec ios/sound_recognition/Sources/sound_recognition/AudioFileRecorder.swift tool/record_wav_apple.swift && /tmp/rec /tmp tool/test_audio/*.wav
 $ python3 tool/classify_wav_yamnet.py tool/test_audio/*.wav     # pip install ai-edge-litert numpy
+$ cd example/android && ./gradlew :sound_recognition:testDebugUnitTest          # JVM, no device
 $ cd example/android && ./gradlew :sound_recognition:connectedDebugAndroidTest
 ```
 

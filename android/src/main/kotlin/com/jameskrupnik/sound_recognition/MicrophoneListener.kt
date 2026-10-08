@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Microphone to YAMNet to callbacks, on one background thread.
@@ -36,6 +37,16 @@ import android.os.SystemClock
  * and when listening stops: an m4a cannot be appended to, and finalizing at
  * the interruption means a process killed in the background still leaves a
  * playable file. Classification carries on either way.
+ *
+ * ### Timestamps
+ *
+ * A result's time is when its window began, in milliseconds since *this*
+ * listener was created — that is, since this `start()` began listening, so
+ * each `start()` counts from zero again. Within one capture segment it is
+ * audio time (samples read); a new segment after an interruption starts from
+ * the wall-clock time since listening began, so times keep rising across an
+ * interruption and include the time spent interrupted. iOS follows the same
+ * rule.
  */
 internal class MicrophoneListener(
   private val context: Context,
@@ -57,12 +68,17 @@ internal class MicrophoneListener(
   private val startedAt = SystemClock.elapsedRealtime()
 
   @Volatile private var running = true
-  @Volatile private var paused = false
   @Volatile private var silenced = false
   @Volatile private var record: AudioRecord? = null
-  @Volatile private var recorder: AacRecorder? = null
+  private val gate = CaptureGate()
   private var thread: Thread? = null
-  private var recordingCallback: AudioManager.AudioRecordingCallback? = null
+  private val recordingCallback = AtomicReference<AudioManager.AudioRecordingCallback?>(null)
+
+  // The recording, and whether it has ended; [recordingLock] keeps an end that
+  // races the opening (a pause while the model loads) from being lost.
+  private val recordingLock = Any()
+  private var recorder: AacRecorder? = null
+  private var recordingOver = false
 
   fun start() {
     thread = Thread(::run, "sound_recognition").also { it.start() }
@@ -77,16 +93,14 @@ internal class MicrophoneListener(
   }
 
   fun pause() {
-    if (paused) return
-    paused = true
-    record?.let { runCatching { it.stop() } }
-    endRecording()
-    post { callbacks.onState(State.INTERRUPTED) }
+    gate.pause {
+      record?.let { runCatching { it.stop() } }
+      endRecording()
+      post { callbacks.onState(State.INTERRUPTED) }
+    }
   }
 
-  fun resume() {
-    paused = false
-  }
+  fun resume() = gate.resume()
 
   private fun run() {
     val classifier = try {
@@ -95,13 +109,11 @@ internal class MicrophoneListener(
       post { callbacks.onError("MODEL_UNAVAILABLE", e.message ?: e.toString()) }
       return
     }
-    // Opened here, off the main thread, because it touches the file system.
-    // A null recorder just means no recording; AacRecorder logged why.
-    recorder = recordTo?.let { AacRecorder.open(it, YamnetClassifier.SAMPLE_RATE) }
+    openRecording()
     try {
       classifier.use {
         while (running) {
-          if (paused) {
+          if (gate.isPaused) {
             Thread.sleep(100)
             continue
           }
@@ -110,13 +122,41 @@ internal class MicrophoneListener(
       }
     } finally {
       // Covers stop(), start() replacing this listener, and fatal errors.
-      recorder?.finishAndWait(FINALIZE_MS)
+      synchronized(recordingLock) {
+        recordingOver = true
+        recorder
+      }?.finishAndWait(FINALIZE_MS)
     }
+  }
+
+  /**
+   * Opened here, off the main thread, because it touches the file system. A
+   * null recorder just means no recording; AacRecorder logged why. Not opened
+   * at all if an interruption already ended the recording while the model
+   * loaded.
+   */
+  private fun openRecording() {
+    val path = recordTo ?: return
+    val opened = AacRecorder.open(path, YamnetClassifier.SAMPLE_RATE) ?: return
+    val keep = synchronized(recordingLock) {
+      if (!recordingOver) recorder = opened
+      !recordingOver
+    }
+    // Finished with nothing written, which deletes the empty file.
+    if (!keep) opened.finish()
   }
 
   /** Finalizes the recording, if any, without waiting. Safe from any thread. */
   private fun endRecording() {
-    recorder?.finish()
+    synchronized(recordingLock) {
+      recordingOver = true
+      recorder
+    }?.finish()
+  }
+
+  private fun writeRecording(pcm: ShortArray, n: Int) {
+    // AacRecorder.write drops chunks once finished, so no lock is needed.
+    recorder?.write(pcm, n)
   }
 
   /**
@@ -133,15 +173,20 @@ internal class MicrophoneListener(
       post { callbacks.onError("AUDIO_UNAVAILABLE", "AudioRecord could not be initialised at 16 kHz mono") }
       return false
     }
-    record = rec
-    registerSilenceCallback(rec)
-    val segmentStartMs = SystemClock.elapsedRealtime() - startedAt
-    val assembler = WindowAssembler(YamnetClassifier.WINDOW_SAMPLES, overlap) { window, startSample ->
-      if (!silenced) report(classifier, window, segmentStartMs + startSample * 1000 / YamnetClassifier.SAMPLE_RATE)
-    }
     try {
-      rec.startRecording()
-      if (rec.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+      // Opened under the gate, so a pause cannot land between starting the
+      // recorder and reporting LISTENING, and "listening" cannot arrive after
+      // that pause's "interrupted".
+      val segment = gate.open { token ->
+        record = rec
+        registerSilenceCallback(rec)
+        rec.startRecording()
+        val recording = rec.recordingState == AudioRecord.RECORDSTATE_RECORDING
+        if (recording) post { callbacks.onState(State.LISTENING) }
+        token to recording
+      } ?: return true // paused while opening: the outer loop waits
+      val (token, recording) = segment
+      if (!recording) {
         // Before Android 10 only one app can capture at a time, and
         // startRecording() fails *without throwing* while another holds the
         // mic (a call, a voice assistant). Reporting LISTENING here would be
@@ -151,24 +196,34 @@ internal class MicrophoneListener(
         Thread.sleep(RETRY_MS)
         return true
       }
-      post { callbacks.onState(State.LISTENING) }
+      val segmentStartMs = SystemClock.elapsedRealtime() - startedAt
+      val assembler = WindowAssembler(YamnetClassifier.WINDOW_SAMPLES, overlap) { window, startSample ->
+        if (!silenced) report(classifier, window, segmentStartMs + startSample * 1000 / YamnetClassifier.SAMPLE_RATE)
+      }
       val chunk = ShortArray(YamnetClassifier.SAMPLE_RATE / 10)
-      while (running && !paused) {
+      while (running && gate.isLive(token)) {
         val n = rec.read(chunk, 0, chunk.size)
         if (n < 0) {
           // ERROR_DEAD_OBJECT and friends: the audio server went away under
           // us. Returning true lets the outer loop open a fresh AudioRecord,
           // after a pause so a persistent failure is not a busy loop.
           // (A read cut short by stop() or pause() is not a failure.)
-          if (running && !paused) {
+          if (running && gate.isLive(token)) {
             endRecording()
             post { callbacks.onState(State.INTERRUPTED) }
             Thread.sleep(RETRY_MS)
           }
           break
         }
-        // Silenced audio is zeros, and silencing ends the recording anyway.
-        if (!silenced) recorder?.write(chunk, n)
+        if (silenced) {
+          // Silenced audio is zeros. Recording it is pointless (silencing
+          // ended the recording anyway), and classifying windows that are
+          // part zeros after the silencing lifts would report "Silence" and
+          // dilute whatever is really there; keep the clock, drop the audio.
+          assembler.skip(n)
+          continue
+        }
+        writeRecording(chunk, n)
         assembler.push(chunk, n)
       }
     } catch (e: IllegalStateException) {
@@ -226,6 +281,10 @@ internal class MicrophoneListener(
     val session = rec.audioSessionId
     val callback = object : AudioManager.AudioRecordingCallback() {
       override fun onRecordingConfigChanged(configs: MutableList<AudioRecordingConfiguration>) {
+        // A change already queued on the main thread when this callback was
+        // unregistered still arrives. Ignore it rather than report a stale
+        // state into whatever session is current by then.
+        if (!running || recordingCallback.get() !== this) return
         val mine = configs.firstOrNull { it.clientAudioSessionId == session } ?: return
         val nowSilenced = mine.isClientSilenced
         if (nowSilenced == silenced) return
@@ -234,13 +293,13 @@ internal class MicrophoneListener(
         callbacks.onState(if (nowSilenced) State.INTERRUPTED else State.LISTENING)
       }
     }
-    recordingCallback = callback
+    recordingCallback.set(callback)
     audioManager.registerAudioRecordingCallback(callback, main)
   }
 
+  /** From the capture thread at a segment's end, and from [stop]; once only. */
   private fun unregisterSilenceCallback() {
-    val callback = recordingCallback ?: return
-    recordingCallback = null
+    val callback = recordingCallback.getAndSet(null) ?: return
     audioManager.unregisterAudioRecordingCallback(callback)
     silenced = false
   }

@@ -102,8 +102,8 @@ class _GateState extends State<_Gate> {
       (_, MicrophonePermission.granted) => null,
       (_, MicrophonePermission.denied) =>
         'Microphone access is off. Turn it on in Settings.',
-      _ => 'This demo listens to the microphone. Nothing is recorded or sent '
-          'anywhere.',
+      _ => 'This demo listens to the microphone. Nothing is sent anywhere, '
+          'and audio is saved only when you turn on Save audio.',
     };
     if (_supported == null) {
       return const Center(child: CircularProgressIndicator());

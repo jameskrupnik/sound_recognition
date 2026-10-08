@@ -1,3 +1,7 @@
+/// @docImport 'package:sound_recognition/src/sound_labels.dart';
+/// @docImport 'package:sound_recognition/src/sound_recognition_base.dart';
+library;
+
 /// The broad group a [CanonicalSound] belongs to.
 ///
 /// It exists for the consuming UI — a hunt screen that says "find an animal",
@@ -25,7 +29,7 @@ enum SoundCategory {
 /// says `dog_bark`; YAMNet says `Bark`, and also `Dog`, and also `Bow-wow`, in
 /// the same second. A game that asks for "a dog" should not have to know
 /// either list, so each value here stands for a *set* of raw labels on each
-/// platform, and those sets are in `SoundLabels` as data rather than here as
+/// platform, and those sets are in [SoundLabels] as data rather than here as
 /// code.
 ///
 /// ### How the list was chosen
@@ -42,7 +46,8 @@ enum SoundCategory {
 ///    are in both lists and deliberately absent here.
 ///
 /// Anything outside the sixty is still reachable: every detection carries
-/// its raw platform label, and `start` takes a `rawLabels` filter.
+/// its raw platform label, and [SoundRecognition.start] takes a `rawLabels`
+/// filter.
 enum CanonicalSound {
   // Animals
   /// Heard as "dog".
@@ -234,8 +239,10 @@ enum CanonicalSound {
   /// The group this sound is listed under.
   final SoundCategory category;
 
-  /// A short English noun phrase — "phone ringing", "jangling keys" — for a debug
-  /// screen or a first cut of the UI. Not localised: a shipped game should
+  /// A short English noun phrase — "phone ringing", "jangling keys" — for a
+  /// debug screen or a first cut of the UI.
+  ///
+  /// Not localised: a shipped game should
   /// key its own strings off [name].
   final String displayName;
 }
