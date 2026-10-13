@@ -302,11 +302,11 @@ phones home breaks the promise. It also has to be disclosed in the Data safety
 form.
 
 The same model on **LiteRT 1.4.2** (`com.google.ai.edge.litert:litert`,
-TensorFlow Lite renamed) depends only on its own `litert-api` and has no telemetry. Its
-native libraries are 16 KB page-aligned, which Play requires. What MediaPipe
-added for this model was thin: YAMNet's input is raw 16 kHz samples, with the
-spectrogram computed inside the graph, so the plugin only has to window the
-audio. LiteRT 2.x has the same `Interpreter`, but it adds a GPU accelerator,
+TensorFlow Lite renamed) depends only on its own `litert-api` and has no
+telemetry. Its native libraries are 16 KB page-aligned, which Play requires.
+What MediaPipe added for this model was thin: YAMNet's input is raw 16 kHz
+samples, with the spectrogram computed inside the graph, so the plugin only
+has to window the audio. LiteRT 2.x has the same `Interpreter`, but it adds a GPU accelerator,
 Guava, coroutines and a model-delivery library that this package does not use.
 
 The example's **release APK declares no `INTERNET` permission at all**. The

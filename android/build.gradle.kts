@@ -63,8 +63,8 @@ kotlin {
 dependencies {
     // LiteRT 1.4.2, 2026-03-11 — TensorFlow Lite under its new name. Chosen
     // over MediaPipe Tasks' tasks-audio 1.0.0 because MediaPipe reports usage
-    // metrics to Google (see YamnetClassifier.kt); this has no transitive
-    // dependencies at all and no telemetry. Pinned to the 1.x line on
+    // metrics to Google (see YamnetClassifier.kt); this depends only on its
+    // own litert-api and has no telemetry. Pinned to the 1.x line on
     // purpose: 2.x keeps the same Interpreter but adds a GPU accelerator .so,
     // Guava, coroutines and a model-delivery library this does not use.
     // Its native libraries are 16 KB page-aligned, which Play requires for

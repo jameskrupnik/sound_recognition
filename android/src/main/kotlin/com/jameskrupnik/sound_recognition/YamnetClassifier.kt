@@ -22,9 +22,10 @@ import org.tensorflow.lite.Interpreter
  * Data safety form besides.
  *
  * LiteRT (`com.google.ai.edge.litert:litert`, the renamed TensorFlow Lite)
- * has no dependencies at all and no telemetry, and what MediaPipe added on top
- * of it for this model is small: YAMNet takes raw 16 kHz mono float samples —
- * the log-mel front end is *inside* the graph — and returns 521 sigmoid scores.
+ * depends only on its own `litert-api` and has no telemetry, and what
+ * MediaPipe added on top of it for this model is small: YAMNet takes raw
+ * 16 kHz mono float samples — the log-mel front end is *inside* the graph —
+ * and returns 521 sigmoid scores.
  * The only thing left to write is the windowing, in [WindowAssembler].
  *
  * It is also smaller: MediaPipe's `tasks-core` 1.0.0 alone is a 22.5 MB AAR;
