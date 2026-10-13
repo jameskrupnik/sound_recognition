@@ -70,7 +70,6 @@ dependencies {
     // Its native libraries are 16 KB page-aligned, which Play requires for
     // targetSdk 35+.
     implementation("com.google.ai.edge.litert:litert:1.4.2")
-    implementation("androidx.core:core:1.13.1")
 
     testImplementation("junit:junit:4.13.2")
 

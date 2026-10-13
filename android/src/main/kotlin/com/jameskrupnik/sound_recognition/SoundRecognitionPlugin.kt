@@ -8,7 +8,6 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import androidx.core.content.ContextCompat
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -186,7 +185,7 @@ class SoundRecognitionPlugin :
   // --- Permission ----------------------------------------------------------
 
   private fun hasPermission() =
-    ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+    context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
       PackageManager.PERMISSION_GRANTED
 
   /**
