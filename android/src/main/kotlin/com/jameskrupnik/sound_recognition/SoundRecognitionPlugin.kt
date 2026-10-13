@@ -261,16 +261,29 @@ class SoundRecognitionPlugin :
     binding.activity.application.registerActivityLifecycleCallbacks(lifecycle)
   }
 
+  /**
+   * The activity is gone for good, so a permission prompt still open will
+   * never report back. Answer with what is known now rather than leave Dart's
+   * requestPermission() waiting forever.
+   */
   override fun onDetachedFromActivity() {
-    binding?.removeRequestPermissionsResultListener(this)
-    binding?.activity?.application?.unregisterActivityLifecycleCallbacks(lifecycle)
-    binding = null
+    pendingPermission?.success(permissionStatus())
+    pendingPermission = null
+    detachActivity()
   }
 
   override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) =
     onAttachedToActivity(binding)
 
-  override fun onDetachedFromActivityForConfigChanges() = onDetachedFromActivity()
+  // A rotation: the prompt survives it and its result reaches the new
+  // activity, so the pending request stays open.
+  override fun onDetachedFromActivityForConfigChanges() = detachActivity()
+
+  private fun detachActivity() {
+    binding?.removeRequestPermissionsResultListener(this)
+    binding?.activity?.application?.unregisterActivityLifecycleCallbacks(lifecycle)
+    binding = null
+  }
 
   private companion object {
     const val REQUEST_CODE = 0x534e // "SN"
