@@ -47,8 +47,9 @@ class SoundRecognition {
   ///
   /// Exposed only so tests can mock it.
   @visibleForTesting
-  static const EventChannel eventChannel =
-      EventChannel('sound_recognition/events');
+  static const EventChannel eventChannel = EventChannel(
+    'sound_recognition/events',
+  );
 
   StreamController<SoundDetection>? _controller;
   // Cancelled in [_release], through a local: the field is cleared *before*
@@ -115,6 +116,33 @@ class SoundRecognition {
   /// value — read [state] first.
   Stream<SoundListeningState> get stateChanges => _states.stream;
 
+  static void _checkStartArguments(
+    double minConfidence,
+    double overlap,
+    String? recordTo,
+  ) {
+    if (minConfidence < 0.01 || minConfidence > 1) {
+      throw ArgumentError.value(
+        minConfidence,
+        'minConfidence',
+        'must be from 0.01 to 1',
+      );
+    }
+    // Capped below 1: at 1 there is no hop, and the next window never comes.
+    if (overlap < 0 || overlap > 0.9) {
+      throw ArgumentError.value(overlap, 'overlap', 'must be from 0 to 0.9');
+    }
+    if (recordTo != null &&
+        (!recordTo.startsWith('/') ||
+            !recordTo.toLowerCase().endsWith('.m4a'))) {
+      throw ArgumentError.value(
+        recordTo,
+        'recordTo',
+        'must be an absolute path ending in .m4a',
+      );
+    }
+  }
+
   /// Starts classifying the microphone and returns the detections.
   ///
   /// Listening begins when the stream is listened to and ends when that
@@ -156,26 +184,7 @@ class SoundRecognition {
     Set<String>? rawLabels,
     String? recordTo,
   }) {
-    if (minConfidence < 0.01 || minConfidence > 1) {
-      throw ArgumentError.value(
-        minConfidence,
-        'minConfidence',
-        'must be from 0.01 to 1',
-      );
-    }
-    // Capped below 1: at 1 there is no hop, and the next window never comes.
-    if (overlap < 0 || overlap > 0.9) {
-      throw ArgumentError.value(overlap, 'overlap', 'must be from 0 to 0.9');
-    }
-    if (recordTo != null &&
-        (!recordTo.startsWith('/') ||
-            !recordTo.toLowerCase().endsWith('.m4a'))) {
-      throw ArgumentError.value(
-        recordTo,
-        'recordTo',
-        'must be an absolute path ending in .m4a',
-      );
-    }
+    _checkStartArguments(minConfidence, overlap, recordTo);
     unawaited(stop());
 
     bool wanted(SoundDetection d) =>
@@ -192,20 +201,22 @@ class SoundRecognition {
         // with stale settings, and this controller's onCancel would then
         // never release it.
         if (!identical(_controller, controller)) return;
-        _native = eventChannel.receiveBroadcastStream({
-          'minConfidence': minConfidence,
-          'overlap': overlap,
-          if (recordTo != null) 'recordTo': recordTo,
-        }).listen(
-          (event) => _onEvent(event, controller, wanted),
-          onError: (Object error, StackTrace stackTrace) {
-            controller.addError(
-              toSoundRecognitionException(error),
-              stackTrace,
+        _native = eventChannel
+            .receiveBroadcastStream({
+              'minConfidence': minConfidence,
+              'overlap': overlap,
+              if (recordTo != null) 'recordTo': recordTo,
+            })
+            .listen(
+              (event) => _onEvent(event, controller, wanted),
+              onError: (Object error, StackTrace stackTrace) {
+                controller.addError(
+                  toSoundRecognitionException(error),
+                  stackTrace,
+                );
+                if (identical(_controller, controller)) unawaited(stop());
+              },
             );
-            if (identical(_controller, controller)) unawaited(stop());
-          },
-        );
       },
       onCancel: () {
         if (identical(_controller, controller)) return _release();

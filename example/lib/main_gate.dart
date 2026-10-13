@@ -23,8 +23,9 @@ class _GateState extends State<_Gate> {
 
   Future<void> _check() async {
     final supported = await SoundRecognition.instance.isSupported();
-    final permission =
-        supported ? await SoundRecognition.instance.permissionStatus() : null;
+    final permission = supported
+        ? await SoundRecognition.instance.permissionStatus()
+        : null;
     if (!mounted) return;
     setState(() {
       _supported = supported;
@@ -46,8 +47,9 @@ class _GateState extends State<_Gate> {
       (_, MicrophonePermission.granted) => null,
       (_, MicrophonePermission.denied) =>
         'Microphone access is off. Turn it on in Settings.',
-      _ => 'This demo listens to the microphone. Nothing is sent anywhere, '
-          'and audio is saved only when you turn on Save audio.',
+      _ =>
+        'This demo listens to the microphone. Nothing is sent anywhere, '
+            'and audio is saved only when you turn on Save audio.',
     };
     if (_supported == null) {
       return const Center(child: CircularProgressIndicator());

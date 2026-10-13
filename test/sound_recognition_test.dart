@@ -105,8 +105,9 @@ void main() {
     });
 
     test('sends its settings to the platform', () async {
-      final sub =
-          recognition.start(minConfidence: 0.3, overlap: 0.75).listen((_) {});
+      final sub = recognition
+          .start(minConfidence: 0.3, overlap: 0.75)
+          .listen((_) {});
       await pumpEventQueue();
       expect(listens.single, {'minConfidence': 0.3, 'overlap': 0.75});
       await sub.cancel();
@@ -185,10 +186,12 @@ void main() {
 
     test('filters to canonical sounds and raw labels, as a union', () async {
       final got = <SoundDetection>[];
-      final sub = recognition.start(
-        sounds: {CanonicalSound.dog},
-        rawLabels: {'Theremin'},
-      ).listen(got.add);
+      final sub = recognition
+          .start(
+            sounds: {CanonicalSound.dog},
+            rawLabels: {'Theremin'},
+          )
+          .listen(got.add);
       await pumpEventQueue();
       sink!.success(
         result(['Bark', 'Music', 'Theremin', 'Dog'], [0.9, 0.8, 0.7, 0.6]),
@@ -226,10 +229,10 @@ void main() {
       final errors = <Object>[];
       final done = Completer<void>();
       recognition.start().listen(
-            (_) {},
-            onError: errors.add,
-            onDone: done.complete,
-          );
+        (_) {},
+        onError: errors.add,
+        onDone: done.complete,
+      );
       await pumpEventQueue();
       sink!.error(code: 'PERMISSION_DENIED', message: 'no mic');
       await done.future.timeout(const Duration(seconds: 1));
@@ -266,15 +269,17 @@ void main() {
     });
 
     test('an exception that is already typed passes through', () {
-      const original =
-          SoundRecognitionException(SoundRecognitionErrorCode.unsupported);
+      const original = SoundRecognitionException(
+        SoundRecognitionErrorCode.unsupported,
+      );
       expect(toSoundRecognitionException(original), same(original));
     });
 
     test('an exception names its code and any message', () {
       expect(
-        const SoundRecognitionException(SoundRecognitionErrorCode.unsupported)
-            .toString(),
+        const SoundRecognitionException(
+          SoundRecognitionErrorCode.unsupported,
+        ).toString(),
         'SoundRecognitionException(unsupported)',
       );
       expect(
@@ -307,36 +312,40 @@ void main() {
       expect(recognition.state, SoundListeningState.stopped);
     });
 
-    test('a stream replaced before it was listened to never opens the mic',
-        () async {
-      final stale = recognition.start();
-      final current = recognition.start(minConfidence: 0.8).listen((_) {});
-      await pumpEventQueue();
-      expect(listens, hasLength(1));
+    test(
+      'a stream replaced before it was listened to never opens the mic',
+      () async {
+        final stale = recognition.start();
+        final current = recognition.start(minConfidence: 0.8).listen((_) {});
+        await pumpEventQueue();
+        expect(listens, hasLength(1));
 
-      final staleDone = Completer<void>();
-      stale.listen((_) {}, onDone: staleDone.complete);
-      await staleDone.future.timeout(const Duration(seconds: 1));
-      await pumpEventQueue();
-      // The live stream's native subscription is untouched: one listen, and
-      // cancelling the live stream still reaches the platform.
-      expect(listens, hasLength(1));
-      await current.cancel();
-      await pumpEventQueue();
-      expect(cancels, 1);
-    });
+        final staleDone = Completer<void>();
+        stale.listen((_) {}, onDone: staleDone.complete);
+        await staleDone.future.timeout(const Duration(seconds: 1));
+        await pumpEventQueue();
+        // The live stream's native subscription is untouched: one listen, and
+        // cancelling the live stream still reaches the platform.
+        expect(listens, hasLength(1));
+        await current.cancel();
+        await pumpEventQueue();
+        expect(cancels, 1);
+      },
+    );
 
-    test('a stream stopped before it was listened to never opens the mic',
-        () async {
-      final stale = recognition.start();
-      await recognition.stop();
-      final done = Completer<void>();
-      stale.listen((_) {}, onDone: done.complete);
-      await done.future.timeout(const Duration(seconds: 1));
-      await pumpEventQueue();
-      expect(listens, isEmpty);
-      expect(recognition.state, SoundListeningState.stopped);
-    });
+    test(
+      'a stream stopped before it was listened to never opens the mic',
+      () async {
+        final stale = recognition.start();
+        await recognition.stop();
+        final done = Completer<void>();
+        stale.listen((_) {}, onDone: done.complete);
+        await done.future.timeout(const Duration(seconds: 1));
+        await pumpEventQueue();
+        expect(listens, isEmpty);
+        expect(recognition.state, SoundListeningState.stopped);
+      },
+    );
 
     test('stop is safe when nothing is listening', () async {
       await recognition.stop();

@@ -16,7 +16,7 @@ part 'state_label.dart';
 Future<String> defaultRecordingPath() async {
   final dir = Platform.isAndroid
       ? await getExternalStorageDirectory() ??
-          await getApplicationDocumentsDirectory()
+            await getApplicationDocumentsDirectory()
       : await getApplicationDocumentsDirectory();
   return '${dir.path}/live.m4a';
 }
@@ -116,8 +116,9 @@ class _LivePageState extends State<LivePage> {
               const Text('Save audio'),
               Switch(
                 value: _save,
-                onChanged:
-                    _listening ? null : (on) => setState(() => _save = on),
+                onChanged: _listening
+                    ? null
+                    : (on) => setState(() => _save = on),
               ),
             ],
           ),

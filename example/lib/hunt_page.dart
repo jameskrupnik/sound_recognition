@@ -51,19 +51,20 @@ class _HuntPageState extends State<HuntPage> {
     // error, and a stream ended elsewhere (the Live tab starting, a stop())
     // leaves this page "Listening…" with its button disabled for good.
     _subscription = SoundRecognition.instance
-        .start(minConfidence: 0.4, sounds: {_target}).listen(
-      (d) {
-        unawaited(_subscription?.cancel());
-        setState(() {
-          _subscription = null;
-          _found = d;
-        });
-      },
-      onError: (Object e) => setState(() => _error = e.toString()),
-      onDone: () {
-        if (mounted) setState(() => _subscription = null);
-      },
-    );
+        .start(minConfidence: 0.4, sounds: {_target})
+        .listen(
+          (d) {
+            unawaited(_subscription?.cancel());
+            setState(() {
+              _subscription = null;
+              _found = d;
+            });
+          },
+          onError: (Object e) => setState(() => _error = e.toString()),
+          onDone: () {
+            if (mounted) setState(() => _subscription = null);
+          },
+        );
     setState(() {});
   }
 
@@ -73,8 +74,8 @@ class _HuntPageState extends State<HuntPage> {
       _subscription = null;
       _found = null;
       _error = null;
-      _target =
-          (_pool.toList()..remove(_target))[_random.nextInt(_pool.length - 1)];
+      _target = (_pool.toList()
+        ..remove(_target))[_random.nextInt(_pool.length - 1)];
     });
   }
 

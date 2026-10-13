@@ -17,10 +17,9 @@ import 'package:sound_recognition/src/sound_labels.dart';
 ///  - `yamnet_class_map.csv`, from `tensorflow/models`
 ///    `research/audioset/yamnet/`.
 void main() {
-  final apple = File('tool/labels/apple_sound_classifier_version1.txt')
-      .readAsLinesSync()
-      .where((l) => l.isNotEmpty)
-      .toList();
+  final apple = File(
+    'tool/labels/apple_sound_classifier_version1.txt',
+  ).readAsLinesSync().where((l) => l.isNotEmpty).toList();
   final yamnet = _yamnetDisplayNames(
     File('tool/labels/yamnet_class_map.csv').readAsStringSync(),
   );

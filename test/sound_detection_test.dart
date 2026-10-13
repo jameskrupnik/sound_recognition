@@ -3,12 +3,12 @@ import 'package:sound_recognition/sound_recognition.dart';
 
 void main() {
   SoundDetection detection({double confidence = 0.91}) => SoundDetection(
-        sound: CanonicalSound.dog,
-        rawLabel: 'Bark',
-        confidence: confidence,
-        timestamp: const Duration(milliseconds: 1950),
-        classifier: SoundClassifier.yamnet,
-      );
+    sound: CanonicalSound.dog,
+    rawLabel: 'Bark',
+    confidence: confidence,
+    timestamp: const Duration(milliseconds: 1950),
+    classifier: SoundClassifier.yamnet,
+  );
 
   test('detections with the same fields are equal and hash alike', () {
     expect(detection(), detection());

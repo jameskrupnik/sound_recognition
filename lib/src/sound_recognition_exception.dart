@@ -46,7 +46,8 @@ class SoundRecognitionException implements Exception {
   final String? message;
 
   @override
-  String toString() => 'SoundRecognitionException(${code.name}'
+  String toString() =>
+      'SoundRecognitionException(${code.name}'
       '${message == null ? '' : ': $message'})';
 }
 

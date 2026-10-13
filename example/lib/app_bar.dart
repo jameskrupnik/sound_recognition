@@ -11,7 +11,10 @@ class _AppBar extends StatelessWidget implements PreferredSizeWidget {
     return AppBar(
       title: const Text('sound_recognition'),
       bottom: const TabBar(
-        tabs: [Tab(text: 'Live'), Tab(text: 'Hunt')],
+        tabs: [
+          Tab(text: 'Live'),
+          Tab(text: 'Hunt'),
+        ],
       ),
     );
   }

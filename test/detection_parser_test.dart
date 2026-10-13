@@ -8,14 +8,13 @@ void main() {
     Object? timeMs = 1950,
     Object? labels = const ['Music', 'Bark', 'Theremin'],
     Object? confidences = const [0.52, 0.91, 0.6],
-  }) =>
-      {
-        'event': 'result',
-        'classifier': classifier,
-        'timeMs': timeMs,
-        'labels': labels,
-        'confidences': confidences,
-      };
+  }) => {
+    'event': 'result',
+    'classifier': classifier,
+    'timeMs': timeMs,
+    'labels': labels,
+    'confidences': confidences,
+  };
 
   test('maps each label, highest confidence first', () {
     final detections = DetectionParser.parse(event());

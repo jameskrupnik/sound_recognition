@@ -72,6 +72,7 @@ class SoundDetection {
       Object.hash(sound, rawLabel, confidence, timestamp, classifier);
 
   @override
-  String toString() => 'SoundDetection(${sound?.name ?? '-'}, "$rawLabel", '
+  String toString() =>
+      'SoundDetection(${sound?.name ?? '-'}, "$rawLabel", '
       '${confidence.toStringAsFixed(2)}, ${timestamp.inMilliseconds} ms)';
 }

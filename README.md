@@ -51,7 +51,9 @@ dependencies:
   sound_recognition: ^0.1.0
 ```
 
-Android `minSdk` 24 (Android 7). iOS: the plugin installs on iOS 13, and
+Flutter 3.44 or later (Dart 3.12). The Android build relies on the Kotlin
+support that Flutter 3.44's Gradle plugin applies. Android `minSdk` 24
+(Android 7). iOS: the plugin installs on iOS 13, and
 `isSupported()` returns false before iOS 15, when Apple's classifier arrived.
 That lets an app with a 13 floor add it and hide the feature, instead of
 being refused the dependency.

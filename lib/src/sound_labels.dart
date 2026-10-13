@@ -25,10 +25,10 @@ enum SoundClassifier {
 ///
 /// Not exported: the wire names are the channel protocol, not API.
 SoundClassifier? classifierFromWireName(String wireName) => switch (wireName) {
-      'apple_sound_analysis_v1' => SoundClassifier.appleVersion1,
-      'yamnet' => SoundClassifier.yamnet,
-      _ => null,
-    };
+  'apple_sound_analysis_v1' => SoundClassifier.appleVersion1,
+  'yamnet' => SoundClassifier.yamnet,
+  _ => null,
+};
 
 /// The mapping from each [CanonicalSound] to the raw labels that mean it.
 ///
@@ -64,26 +64,23 @@ abstract final class SoundLabels {
   /// The mapping for [classifier].
   static Map<CanonicalSound, Set<String>> forClassifier(
     SoundClassifier classifier,
-  ) =>
-      switch (classifier) {
-        SoundClassifier.appleVersion1 => apple,
-        SoundClassifier.yamnet => yamnet,
-      };
+  ) => switch (classifier) {
+    SoundClassifier.appleVersion1 => apple,
+    SoundClassifier.yamnet => yamnet,
+  };
 
   /// The raw labels that mean [sound] on [classifier].
   static Set<String> labelsFor(
     CanonicalSound sound,
     SoundClassifier classifier,
-  ) =>
-      forClassifier(classifier)[sound] ?? const {};
+  ) => forClassifier(classifier)[sound] ?? const {};
 
   /// The canonical sound [rawLabel] belongs to, or null if it is outside the
   /// canonical set — most of both lists is.
   static CanonicalSound? canonicalFor(
     String rawLabel,
     SoundClassifier classifier,
-  ) =>
-      _reverse(classifier)[rawLabel];
+  ) => _reverse(classifier)[rawLabel];
 
   static final Map<SoundClassifier, Map<String, CanonicalSound>> _reverseIndex =
       {};
@@ -93,8 +90,9 @@ abstract final class SoundLabels {
   static Map<String, CanonicalSound> _reverse(SoundClassifier classifier) =>
       _reverseIndex.putIfAbsent(classifier, () {
         return {
-          for (final MapEntry(key: sound, value: labels)
-              in forClassifier(classifier).entries)
+          for (final MapEntry(key: sound, value: labels) in forClassifier(
+            classifier,
+          ).entries)
             for (final label in labels) label: sound,
         };
       });
