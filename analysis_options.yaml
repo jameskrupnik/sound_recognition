@@ -27,14 +27,16 @@ analyzer:
 
 linter:
   rules:
-    # --- Off, with reasons -------------------------------------------------
+    # --- On, unlike the apps ------------------------------------------------
 
-    # Carried from the app config this is shared with. A doc comment on
-    # every public
-    # member buys a wall of `/// The name.` restatements, which is the
-    # opposite of readable — and it would drown the comments in these repos
-    # that are genuinely worth reading.
+    # The app config this is shared with turns this off: in an app, a doc
+    # comment on every public member buys a wall of `/// The name.`
+    # restatements. A published package is different. Its public API is what
+    # pub.dev's documentation shows, and pana scores it, so every public member
+    # is documented here.
     public_member_api_docs: true
+
+    # --- Off, with reasons -------------------------------------------------
 
     # **This rule breaks `math.max`/`math.min` and it broke five apps here.**
     # Rewriting `math.max(0.0, x)` to `math.max(0, x)` selects the `num`
