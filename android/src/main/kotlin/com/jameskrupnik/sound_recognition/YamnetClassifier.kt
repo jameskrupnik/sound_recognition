@@ -47,9 +47,11 @@ internal class YamnetClassifier(assets: AssetManager) : Closeable {
     val model = ByteBuffer.allocateDirect(bytes.size).order(ByteOrder.nativeOrder())
     model.put(bytes).rewind()
     interpreter = Interpreter(model, Interpreter.Options().setNumThreads(2))
-    check(interpreter.getOutputTensor(0).shape().last() == labels.size) {
-      "Model has ${interpreter.getOutputTensor(0).shape().last()} classes, " +
-        "label list has ${labels.size}"
+    val classes = interpreter.getOutputTensor(0).shape().last()
+    if (classes != labels.size) {
+      // The caller never gets an instance to close, so close it here.
+      interpreter.close()
+      error("Model has $classes classes, label list has ${labels.size}")
     }
   }
 
