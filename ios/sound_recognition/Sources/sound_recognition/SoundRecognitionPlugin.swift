@@ -28,6 +28,13 @@ public class SoundRecognitionPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
     events.setStreamHandler(instance)
   }
 
+  /// The engine is going away, and with it the Dart side that would have
+  /// cancelled the stream: stop the microphone and put the app's audio
+  /// session category back.
+  public func detachFromEngine(for registrar: FlutterPluginRegistrar) {
+    stopListening()
+  }
+
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
     case "isSupported":
