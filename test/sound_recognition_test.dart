@@ -312,6 +312,13 @@ void main() {
       expect(recognition.state, SoundListeningState.stopped);
     });
 
+    test('stop waits for native to finish after cancelling', () async {
+      recognition.start().listen((_) {});
+      await pumpEventQueue();
+      await recognition.stop();
+      expect(calls.map((c) => c.method), ['awaitIdle']);
+    });
+
     test(
       'a stream replaced before it was listened to never opens the mic',
       () async {

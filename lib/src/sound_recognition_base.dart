@@ -261,7 +261,16 @@ class SoundRecognition {
     _controller = null;
     _native = null;
     _setState(SoundListeningState.stopped);
-    await native?.cancel();
+    if (native == null) return;
+    await native.cancel();
+    // Android stops without blocking its main thread and finalizes any
+    // recording in the background; this completes once that is done, so the
+    // file is ready when stop() or cancel() completes, as on iOS.
+    try {
+      await methodChannel.invokeMethod<void>('awaitIdle');
+    } on MissingPluginException {
+      // No plugin, as in a test: nothing to wait for.
+    }
   }
 
   void _setState(SoundListeningState state) {

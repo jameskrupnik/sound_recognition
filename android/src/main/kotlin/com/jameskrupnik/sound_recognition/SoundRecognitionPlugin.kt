@@ -6,6 +6,8 @@ import android.app.Application
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -15,6 +17,9 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.PluginRegistry
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 
 /**
  * The Android half: a method channel for permission and metadata, and an
@@ -42,6 +47,12 @@ class SoundRecognitionPlugin :
   private var listener: MicrophoneListener? = null
   private var engine: FlutterEngine? = null
 
+  // One background thread that starts each listener only after the one it
+  // replaced has exited, so the main thread never waits for a capture thread
+  // and two AudioRecords are never open at once.
+  private var lifecycleExecutor: ExecutorService? = null
+  private val main = Handler(Looper.getMainLooper())
+
   // Hot restart replaces the Dart isolate without cancelling the event
   // channel, so without this the AudioRecord outlives the Dart code that owned
   // it until the next start().
@@ -52,6 +63,7 @@ class SoundRecognitionPlugin :
 
   override fun onAttachedToEngine(flutter: FlutterPlugin.FlutterPluginBinding) {
     context = flutter.applicationContext
+    lifecycleExecutor = Executors.newSingleThreadExecutor { Thread(it, "sound_recognition_lifecycle") }
     engine = flutter.flutterEngine.also { it.addEngineLifecycleListener(engineLifecycle) }
     methods = MethodChannel(flutter.binaryMessenger, "sound_recognition")
     methods.setMethodCallHandler(this)
@@ -65,6 +77,9 @@ class SoundRecognitionPlugin :
     engine?.removeEngineLifecycleListener(engineLifecycle)
     engine = null
     stopListening()
+    // Lets the queued wait for the last listener run, then ends the thread.
+    lifecycleExecutor?.shutdown()
+    lifecycleExecutor = null
   }
 
   override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
@@ -74,6 +89,7 @@ class SoundRecognitionPlugin :
       "isSupported" -> result.success(true)
       "permissionStatus" -> result.success(permissionStatus())
       "requestPermission" -> requestPermission(result)
+      "awaitIdle" -> awaitIdle(result)
       "knownLabels" -> try {
         result.success(YamnetClassifier.readLabels(context.assets))
       } catch (e: Exception) {
@@ -130,7 +146,7 @@ class SoundRecognitionPlugin :
       },
     )
     listener = created
-    created.start()
+    inBackground(created::start)
   }
 
   override fun onCancel(arguments: Any?) = stopListening()
@@ -140,6 +156,31 @@ class SoundRecognitionPlugin :
     // Cleared first: callbacks the stop itself triggers are no longer current.
     listener = null
     stopping.stop()
+    // Finalizing a recording can take up to FINALIZE_MS; a little more covers
+    // releasing the AudioRecord. Past that, the next start goes ahead anyway.
+    inBackground { stopping.awaitExit(MicrophoneListener.FINALIZE_MS + EXIT_SLACK_MS) }
+  }
+
+  /**
+   * Replies once every stop queued so far has finished, recording included,
+   * so Dart's stop() completes with the file ready. Never blocks the main
+   * thread.
+   */
+  private fun awaitIdle(result: MethodChannel.Result) {
+    val executor = lifecycleExecutor ?: return result.success(null)
+    try {
+      executor.execute { main.post { result.success(null) } }
+    } catch (_: RejectedExecutionException) {
+      result.success(null)
+    }
+  }
+
+  /** Queues [block] behind earlier starts and stops; dropped after detach. */
+  private fun inBackground(block: () -> Unit) {
+    try {
+      lifecycleExecutor?.execute(block)
+    } catch (_: RejectedExecutionException) {
+    }
   }
 
   // --- Permission ----------------------------------------------------------
@@ -234,5 +275,6 @@ class SoundRecognitionPlugin :
   private companion object {
     const val REQUEST_CODE = 0x534e // "SN"
     const val DENIED_ONCE_KEY = "microphone_denied_once"
+    const val EXIT_SLACK_MS = 1_000L
   }
 }

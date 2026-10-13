@@ -11,6 +11,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -37,6 +39,14 @@ import java.util.concurrent.atomic.AtomicReference
  * and when listening stops: an m4a cannot be appended to, and finalizing at
  * the interruption means a process killed in the background still leaves a
  * playable file. Classification carries on either way.
+ *
+ * ### Threads
+ *
+ * [start], [stop], [pause] and [resume] never block, so the main thread can
+ * call them. Waiting for the capture thread to finish (it may be closing the
+ * `AudioRecord` or finalizing the recording) is [awaitExit], for a background
+ * thread; the plugin runs the next [start] after it, so two `AudioRecord`s are
+ * never open at once.
  *
  * ### Timestamps
  *
@@ -68,6 +78,9 @@ internal class MicrophoneListener(
   private val startedAt = SystemClock.elapsedRealtime()
 
   @Volatile private var running = true
+  // Counted down by stop(), so the capture thread's waits end at once.
+  private val stopSignal = CountDownLatch(1)
+  private val threadLock = Any()
   @Volatile private var silenced = false
   @Volatile private var record: AudioRecord? = null
   private val gate = CaptureGate()
@@ -80,16 +93,30 @@ internal class MicrophoneListener(
   private var recorder: AacRecorder? = null
   private var recordingOver = false
 
+  /** Starts the capture thread, unless [stop] came first. */
   fun start() {
-    thread = Thread(::run, "sound_recognition").also { it.start() }
+    synchronized(threadLock) {
+      if (!running) return
+      thread = Thread(::run, "sound_recognition").also { it.start() }
+    }
   }
 
+  /** Tells the capture thread to finish, without waiting for it. */
   fun stop() {
-    running = false
+    synchronized(threadLock) { running = false }
+    stopSignal.countDown()
     record?.let { runCatching { it.stop() } }
-    thread?.join(1_000)
-    thread = null
     unregisterSilenceCallback()
+  }
+
+  /**
+   * Waits, off the main thread, for the capture thread to release the
+   * `AudioRecord` and finalize the recording. False if it outlived [timeoutMs].
+   */
+  fun awaitExit(timeoutMs: Long): Boolean {
+    val exiting = synchronized(threadLock) { thread } ?: return true
+    exiting.join(timeoutMs)
+    return !exiting.isAlive
   }
 
   fun pause() {
@@ -114,7 +141,7 @@ internal class MicrophoneListener(
       classifier.use {
         while (running) {
           if (gate.isPaused) {
-            Thread.sleep(100)
+            pauseFor(100)
             continue
           }
           if (!captureSegment(it)) return
@@ -193,7 +220,7 @@ internal class MicrophoneListener(
         // a lie that never recovers; report an interruption and retry.
         endRecording()
         post { callbacks.onState(State.INTERRUPTED) }
-        Thread.sleep(RETRY_MS)
+        pauseFor(RETRY_MS)
         return true
       }
       val segmentStartMs = SystemClock.elapsedRealtime() - startedAt
@@ -211,7 +238,7 @@ internal class MicrophoneListener(
           if (running && gate.isLive(token)) {
             endRecording()
             post { callbacks.onState(State.INTERRUPTED) }
-            Thread.sleep(RETRY_MS)
+            pauseFor(RETRY_MS)
           }
           break
         }
@@ -304,12 +331,19 @@ internal class MicrophoneListener(
     silenced = false
   }
 
+  /** Waits [ms] on the capture thread, or less if [stop] is called. */
+  private fun pauseFor(ms: Long) {
+    stopSignal.await(ms, TimeUnit.MILLISECONDS)
+  }
+
   private fun post(block: () -> Unit) {
     main.post { if (running) block() }
   }
 
-  private companion object {
-    const val RETRY_MS = 1_000L
+  companion object {
+    private const val RETRY_MS = 1_000L
+
+    /** How long the capture thread gives the recording to be finalized. */
     const val FINALIZE_MS = 2_000L
   }
 }

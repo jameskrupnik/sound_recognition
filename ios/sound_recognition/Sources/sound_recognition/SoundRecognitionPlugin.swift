@@ -45,6 +45,9 @@ public class SoundRecognitionPlugin: NSObject, FlutterPlugin, FlutterStreamHandl
       } else {
         result([String]())
       }
+    case "awaitIdle":
+      // Stopping here already waits for the recording to be finalized.
+      result(nil)
     default:
       result(FlutterMethodNotImplemented)
     }

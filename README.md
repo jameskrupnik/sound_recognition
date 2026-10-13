@@ -159,9 +159,12 @@ if (File(path).existsSync()) savePracticeRecording(path);
   recording, watch `stateChanges` and call `start()` again with a new path.
   A route change on iOS (headphones in or out) is not an interruption, and
   the recording carries on.
-- **Finalized when the future completes.** On iOS, `stop()` and
+- **Finalized when the future completes.** `stop()` and
   `subscription.cancel()` complete after the file is closed. On Android the
-  plugin waits up to a second for it, which is normally plenty.
+  file is finalized on a background thread, never the main one, which gets up
+  to 2 seconds for it and normally needs far less; past that the future
+  completes anyway. A `start()` that follows waits for it before opening the
+  microphone again.
 - **Diagnosing a missed sound.** The file is exactly what the classifier
   heard, so recording is also the way to tell a sound the microphone never
   picked up from one the classifier missed.
