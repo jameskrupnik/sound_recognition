@@ -7,7 +7,7 @@
 /// package bundles Google's YAMNet (521 AudioSet classes) and runs it with
 /// LiteRT. Apple says `dog_bark`; YAMNet says `Bark`.
 ///
-/// `CanonicalSound` is the fix: sixty common sounds, each mapped to the raw
+/// [CanonicalSound] is the fix: sixty common sounds, each mapped to the raw
 /// labels that mean it on both platforms, with a test that holds every
 /// mapped label to the platform's real list. The raw labels are still there on
 /// every detection for anything outside the sixty.
@@ -22,6 +22,8 @@
 /// That is a property of the choices underneath, not an accident: see the
 /// README for why this is LiteRT and not MediaPipe Tasks, whose Android
 /// library reports usage metrics to Google.
+///
+/// @docImport 'package:sound_recognition/src/canonical_sound.dart';
 library;
 
 export 'src/canonical_sound.dart' show CanonicalSound, SoundCategory;

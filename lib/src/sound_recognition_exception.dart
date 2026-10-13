@@ -25,7 +25,11 @@ enum SoundRecognitionErrorCode {
   /// This means the plugin's assets were stripped from the APK.
   modelUnavailable,
 
-  /// Anything the native side reported that this version does not know.
+  /// Any other failure, with the platform's own description as the message.
+  ///
+  /// iOS sends this when Apple's classifier fails mid-stream, because
+  /// SoundAnalysis does not say why in any way worth a code of its own. It
+  /// is also what an error code this version does not know becomes.
   unknown,
 }
 
