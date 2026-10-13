@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sound_recognition/sound_recognition.dart';
 
+part 'detection_tile.dart';
+part 'state_label.dart';
+
 /// Where the Live tab saves audio when "Save audio" is on.
 ///
 /// On Android this is the app's external files directory, so the file can be
@@ -136,39 +139,6 @@ class _LivePageState extends State<LivePage> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _StateLabel extends StatelessWidget {
-  const _StateLabel();
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<SoundListeningState>(
-      stream: SoundRecognition.instance.stateChanges,
-      initialData: SoundRecognition.instance.state,
-      builder: (context, snapshot) => Text(snapshot.requireData.name),
-    );
-  }
-}
-
-class _DetectionTile extends StatelessWidget {
-  const _DetectionTile(this.detection);
-
-  final SoundDetection detection;
-
-  @override
-  Widget build(BuildContext context) {
-    final seconds = detection.timestamp.inMilliseconds / 1000;
-    return ListTile(
-      dense: true,
-      title: Text(detection.sound?.displayName ?? '(not canonical)'),
-      subtitle: Text('${detection.rawLabel} · ${seconds.toStringAsFixed(1)} s'),
-      trailing: SizedBox(
-        width: 72,
-        child: LinearProgressIndicator(value: detection.confidence),
-      ),
     );
   }
 }
