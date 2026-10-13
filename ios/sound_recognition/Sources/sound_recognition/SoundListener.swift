@@ -294,7 +294,10 @@ final class SoundListener: NSObject {
     guard !labels.isEmpty else { return }
     let timeMs = Int(((runOffset + result.timeRange.start.seconds) * 1000).rounded())
     DispatchQueue.main.async { [weak self] in
-      guard let self, !self.stopped else { return }
+      // An interruption's completeAnalysis() flushes the stopped run's last
+      // windows after "interrupted" went out; no detections arrive in that
+      // state, so they are dropped.
+      guard let self, !self.stopped, !self.interrupted else { return }
       self.onEvent([
         "event": "result",
         "classifier": "apple_sound_analysis_v1",
