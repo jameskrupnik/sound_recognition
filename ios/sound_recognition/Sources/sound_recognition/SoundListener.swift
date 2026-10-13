@@ -83,8 +83,18 @@ final class SoundListener: NSObject {
   func start() throws {
     let session = AVAudioSession.sharedInstance()
     savedSession = (session.category, session.mode, session.categoryOptions)
-    try activateSession()
+    try setSessionCategory()
     observe()
+    do {
+      try session.setActive(true)
+    } catch {
+      // Another app holds the input: a call, Siri, a recorder. That is an
+      // interruption, not a failure, as on Android: report it and try again
+      // on the interruption's end or when the app is next active. With no
+      // audio yet, no recording is started.
+      markInterrupted()
+      return
+    }
     if let recordTo {
       // Nil when the file cannot be created: listening goes on without it.
       recorder = AudioFileRecorder(
@@ -99,12 +109,15 @@ final class SoundListener: NSObject {
     recorder = nil
   }
 
-  private func activateSession() throws {
-    let session = AVAudioSession.sharedInstance()
-    try session.setCategory(
+  private func setSessionCategory() throws {
+    try AVAudioSession.sharedInstance().setCategory(
       .playAndRecord, mode: .default,
       options: [.mixWithOthers, .defaultToSpeaker, .allowBluetoothA2DP])
-    try session.setActive(true)
+  }
+
+  private func activateSession() throws {
+    try setSessionCategory()
+    try AVAudioSession.sharedInstance().setActive(true)
   }
 
   func stop() {
