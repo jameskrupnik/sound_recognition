@@ -1,27 +1,34 @@
 import Flutter
-import UIKit
 import XCTest
-
 
 @testable import sound_recognition
 
-// This demonstrates a simple unit test of the Swift portion of this plugin's implementation.
-//
-// See https://developer.apple.com/documentation/xctest for more information about using XCTest.
-
+/// The method channel's answers that need no microphone.
 class RunnerTests: XCTestCase {
 
-  func testGetPlatformVersion() {
+  private func call(_ method: String) -> Any? {
     let plugin = SoundRecognitionPlugin()
-
-    let call = FlutterMethodCall(methodName: "getPlatformVersion", arguments: [])
-
-    let resultExpectation = expectation(description: "result block must be called.")
-    plugin.handle(call) { result in
-      XCTAssertEqual(result as! String, "iOS " + UIDevice.current.systemVersion)
-      resultExpectation.fulfill()
+    var answer: Any?
+    let answered = expectation(description: "\(method) answers")
+    plugin.handle(FlutterMethodCall(methodName: method, arguments: nil)) { result in
+      answer = result
+      answered.fulfill()
     }
     waitForExpectations(timeout: 1)
+    return answer
   }
 
+  func testIsSupportedMatchesTheOSVersion() {
+    let expected: Bool
+    if #available(iOS 15.0, *) { expected = true } else { expected = false }
+    XCTAssertEqual(call("isSupported") as? Bool, expected)
+  }
+
+  func testKnownLabelsIsAList() {
+    XCTAssertNotNil(call("knownLabels") as? [String])
+  }
+
+  func testAnUnknownMethodIsNotImplemented() {
+    XCTAssertTrue(call("getPlatformVersion") as AnyObject === FlutterMethodNotImplemented)
+  }
 }
